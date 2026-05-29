@@ -1,0 +1,32 @@
+<!-- This is the standard declaration that tells the system reading the file that it is an XML document formatted with standard UTF-8 text encoding. -->
+<!-- 
+/**********************************************************************************\
+* *
+* IMPORTANT: Do not edit this Directory.Build.props.default file directly.         *
+* Please make a copy of this file, rename it to 'Directory.Build.props.user',      *
+* and change the directory paths below to match your own local setup.              *
+* *
+\**********************************************************************************/ 
+-->
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The root element of an MSBuild file. Everything related to how your code is built and compiled is contained within this tag. -->
+<Project>
+	<!-- This acts as a container for variables. 
+	Think of it like a dictionary or configuration block where you define custom variables (like folder paths) that the rest of your build script can use. -->
+	<PropertyGroup>
+		<!-- This defines a variable named GameLibsFolder and points it to the standard Windows Steam installation path for Oxygen Not Included. 
+		This folder contains the game's .dll files, which your mod needs to reference in order to interact with the game's code. -->
+		<GameLibsFolder>C:\Program Files (x86)\Steam\steamapps\common\OxygenNotIncluded\OxygenNotIncluded_Data\Managed</GameLibsFolder>
+		<!-- This acts as a fallback. The Condition="!Exists('$(GameLibsFolder)')" statement means: 
+		"If the folder defined above does NOT exist, use this path instead." The fallback path (/mnt/c/...) is the standard format for WSL (Windows Subsystem for Linux). 
+		This allows the same code repository to compile seamlessly whether you are coding in native Windows or via WSL. -->
+		<GameLibsFolder Condition="!Exists('$(GameLibsFolder)')" >/mnt/c/Program Files (x86)/Steam/steamapps/common/OxygenNotIncluded/OxygenNotIncluded_Data/Managed</GameLibsFolder>
+		<!-- This defines a variable named ModFolder and points it to the standard Windows Steam installation path for Oxygen Not Included mods. -->
+		<ModFolder>C:\Users\USER\Documents\Klei\OxygenNotIncluded\mods\Dev</ModFolder>
+		<!-- This is another fallback. If the ModFolder defined above does NOT exist, it uses the WSL-style path instead. -->
+		<ModFolder Condition="!Exists('$(ModFolder)')">/mnt/c/Users/USER/Documents/Klei/OxygenNotIncluded/mods/Dev</ModFolder>
+		<!-- This variable is used to indicate whether Refasmer is installed. Refasmer is a tool that generates reference assemblies, which can be useful for GitHub CI (Continuous Integration) builds.
+		If you don't use automatic GitHub builds or don't want to install Refasmer, you can set this variable to 0. -->
+		<RefasmerInstalled>1</RefasmerInstalled>
+	</PropertyGroup>
+</Project>

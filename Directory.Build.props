@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+    <!-- 1. IMPORT YOUR LOCAL SETTINGS -->
+    <!-- This is what reads your Directory.Build.props.user file if it exists -->
+    <Import Condition=" Exists('Directory.Build.props.user') " Project="Directory.Build.props.user" />
+
+    <!-- 2. FALLBACK PATHS -->
+    <!-- If someone downloads your code but doesn't make a .user file, it uses these defaults -->
+    <PropertyGroup>
+        <GameLibsFolder Condition=" '$(GameLibsFolder)' == '' ">C:\Program Files (x86)\Steam\steamapps\common\OxygenNotIncluded\OxygenNotIncluded_Data\Managed</GameLibsFolder>
+        <ModFolder Condition=" '$(ModFolder)' == '' ">$(USERPROFILE)\Documents\Klei\OxygenNotIncluded\mods\Dev</ModFolder>
+    </PropertyGroup>
+
+    <!-- 3. COMPILER SETTINGS -->
+    <PropertyGroup>
+        <!-- ONI and Unity use .NET Framework 4.8 -->
+        <TargetFramework>net48</TargetFramework>
+        <LangVersion>11.0</LangVersion>
+        <Optimize>true</Optimize>
+        <DebugType>embedded</DebugType>
+    </PropertyGroup>
+
+    <!-- 4. GAME DEPENDENCIES -->
+    <!-- This links your mod to the actual game code using the folder paths from above -->
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(GameLibsFolder)\Assembly-CSharp.dll</HintPath>
+            <!-- Private=False means "don't copy this giant game file into my tiny mod folder" -->
+            <Private>False</Private> 
+        </Reference>
+        <Reference Include="0Harmony">
+            <HintPath>$(GameLibsFolder)\0Harmony.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>$(GameLibsFolder)\UnityEngine.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(GameLibsFolder)\UnityEngine.CoreModule.dll</HintPath>
+            <Private>False</Private>
+        </Reference>
+    </ItemGroup>
+</Project>

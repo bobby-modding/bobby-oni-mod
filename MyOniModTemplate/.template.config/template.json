@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Your Name",
+  "classifications": ["Mod"],
+  "name": "Oxygen Not Included Mod",
+  "identity": "ONI.Mod.Template",
+  "shortName": "myonimodtemplate",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "MyOniModTemplate"
+}

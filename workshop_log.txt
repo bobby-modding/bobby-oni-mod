@@ -1,0 +1,18 @@
+Steam>workshop_build_item /home/steam/steamcmd/modding/SuperDuperMod/SuperDuperMod.vdf
+Create new workshop item ( PublishFileID 3734776656).
+Preparing update...ERROR! Failed to update workshop item (Invalid Parameter).
+
+Steam>exit
+
+steam@213d90044a8c:~/steamcmd$ cat ~/Steam/logs/workshop_log.txt
+[2026-05-29 05:23:59] Client version: 1779919584
+[2026-05-29 05:23:59] Loading workshop items for 21 installed apps for user [U:1:57711121]:
+[2026-05-29 05:24:12] [AppID 868360] Subscribed items changed
+[2026-05-29 05:24:14] [AppID 602960] Subscribed items changed
+[2026-05-29 05:24:14] [AppID 457140] Subscribed items changed
+[2026-05-29 05:24:14] [AppID 431960] Subscribed items changed
+[2026-05-29 05:24:15] [AppID 289070] Subscribed items changed
+[2026-05-29 05:24:17] [AppID 108600] Subscribed items changed
+[2026-05-29 05:24:36] [AppID 457140] Create new workshop item of type Community for AppID 457140 : 3734776656 (OK)
+[2026-05-29 05:24:36] [AppID 457140] Upload starting for workshop item 3734776656 by AppID 457140
+[2026-05-29 05:24:37] [AppID 457140] Upload workshop item 3734776656 failed (no workshop depot found)
