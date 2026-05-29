@@ -1,0 +1,119 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    
+    <RootNamespace>MaterialSearchOverlay</RootNamespace>
+    <AssemblyName>MaterialSearchOverlay</AssemblyName>
+    
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+
+    <MinimumSupportedBuild>469112</MinimumSupportedBuild>
+    <ModAPIVersion>2</ModAPIVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PLib" Version="4.22.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameLibsFolder)/0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameLibsFolder)/Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(GameLibsFolder)/Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameLibsFolder)/UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameLibsFolder)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameLibsFolder)/UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(GameLibsFolder)/Unity.TextMeshPro.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameLibsFolder)/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="mod.yaml" CopyToOutputDirectory="Always" />
+    <None Update="mod_info.yaml" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+<Target Name="GenerateModInfoYaml" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <ModInfoContent>supportedContent: ALL
+minimumSupportedBuild: $(MinimumSupportedBuild)
+version: $(Version)
+APIVersion: $(ModAPIVersion)</ModInfoContent>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/mod_info.yaml" Lines="$(ModInfoContent)" Overwrite="true" />
+    <Message Text="Generated mod_info.yaml (version $(Version))" Importance="high" />
+  </Target>
+
+  <Target Name="CopyToDevFolder" AfterTargets="Build">
+    <PropertyGroup>
+      <InstallFolder>$(ModFolder)/$(ProjectName)</InstallFolder>
+    </PropertyGroup>
+
+    <Message Text="Copying mod files to $(InstallFolder)..." Importance="high" />
+
+    <MakeDir Directories="$(InstallFolder)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(InstallFolder)" />
+    <Copy SourceFiles="$(TargetDir)PLib.dll" DestinationFolder="$(InstallFolder)" Condition="Exists('$(TargetDir)PLib.dll')" />
+    <Copy SourceFiles="$(TargetDir)Newtonsoft.Json.dll" DestinationFolder="$(InstallFolder)" Condition="Exists('$(TargetDir)Newtonsoft.Json.dll')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png" DestinationFiles="$(InstallFolder)/preview.png" Condition="Exists('$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png')" />
+  </Target>
+  
+  <!--  Automatically generates the SteamCMD .vdf file for Docker steamcmd, currently not supported -->
+  <!-- <Target Name="GenerateSteamVDF" AfterTargets="Build">
+    <PropertyGroup>
+      <WorkshopId></WorkshopId>
+
+      <VdfFilePath>$(ProjectDir)$(ProjectName).vdf</VdfFilePath>
+
+      <DockerContentFolder>/home/steam/steamcmd/modding/$(ProjectName)/$([System.String]::Copy('$(OutputPath)').Replace('\','/'))</DockerContentFolder>
+      <DockerPreviewFile>/home/steam/steamcmd/modding/$(ProjectName)/$(ProjectName)_Preview.png</DockerPreviewFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <VdfLine Include='"workshopitem"' />
+      <VdfLine Include='{' />
+      <VdfLine Include=' "appid" "457140"' /> 
+      <VdfLine Include=' "publishedfileid" "$(WorkshopId)"' />
+      <VdfLine Include=' "contentfolder" "$(DockerContentFolder)"' />
+      <VdfLine Include=' "previewfile" "$(DockerPreviewFile)"' />
+      <VdfLine Include=' "visibility" "0"' />
+      <VdfLine Include=' "title" "$(ProjectName)"' />
+      <VdfLine Include=' "description" "A $(ProjectName) mod for Oxygen Not Included."' />
+      <VdfLine Include=' "changenote" "Initial Release"' />
+      <VdfLine Include='}' />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(VdfFilePath)" Lines="@(VdfLine)" Overwrite="true" />
+    
+    <Message Importance="High" Text="Generated Docker-ready VDF file for $(ProjectName)" />
+  </Target> -->
+
+</Project>
