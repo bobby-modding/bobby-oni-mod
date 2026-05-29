@@ -20,7 +20,7 @@ dotnet build MaterialSearchOverlay        # compile one mod
   refasmer -v -O ./Refs -c --all "/path/to/OxygenNotIncluded_Data/Managed/"*.dll
   ```
 - **Local overrides** — `Directory.Build.props.user` (gitignored) sets `GameLibsFolder` and `ModFolder`. WSL / native Windows variants in `Directory.Build.props.default`.
-- **Auto-deploy** — `dotnet build` runs a post-build target that copies the DLL + dependency DLLs (PLib, Newtonsoft.Json) + yamls + preview.png to `$(ModFolder)/$(ProjectName)`. No manual copy needed.
+- **Auto-deploy** — `dotnet build` runs a post-build target that copies the DLL + yamls + preview.png to `$(ModFolder)/$(ProjectName)`. No manual copy needed. PLib is merged into the mod DLL via ILRepack. Newtonsoft.Json is referenced directly from the game's Managed folder.
 
 ## Mod structure conventions
 
@@ -31,14 +31,14 @@ Every mod project follows this layout:
 - `*_Strings.cs` — `LocString`-based localized strings
 - `*_Options.cs` — `[ModInfo]` + `[Option]` attributes, JSON serialization
 - Version is managed via `<Version>` in `.csproj` — set once, flows to assembly attributes and `mod_info.yaml`
-- PLib and Newtonsoft.Json are NuGet packages (`PLib` 4.22.0, `Newtonsoft.Json` 13.0.3), add `<PackageReference>` to csproj — they are NOT in the game's Managed folder
+- PLib is a NuGet package (`PLib` 4.22.0), merged into the mod DLL via ILRepack at build time. Newtonsoft.Json is referenced directly from the game's Managed folder (already ships with ONI).
 
 ## Framework quirks
 
 - **Harmony 2** patches via `UserMod2.OnLoad(Harmony)` — the Harmony instance is passed in, do not create your own
 - **OverlayModes.Mode** — custom overlay needs `Enable()`, `Disable()`, `Update()`, `GetCustomLegendData()`, `ViewMode()`. Toggle with `CameraController.Instance.ToggleColouredOverlayView()`
 - **Game DLL references** in csproj use `<Private>False</Private>` — not copied to output. Common extras: `Unity.TextMeshPro`, `UnityEngine.TextRenderingModule`, `UnityEngine.UI`, `Assembly-CSharp-firstpass`
-- **PLib** available as NuGet, does NOT ship with the game
+- **PLib** available as NuGet, does NOT ship with the game. Merged into mod DLL via ILRepack at build time.
 
 ## Commands
 
@@ -60,7 +60,7 @@ No test framework. Manual testing via game launch with mod auto-deployed to dev 
 
 ## .sln note
 
-The root `bobby-oni-mod.sln` still references a deleted `SuperDuperMod` project. `MaterialSearchOverlay` is on disk but not in the .sln. Build works fine without fixing this.
+The root `bobby-oni-mod.sln` was fixed to reference `MaterialSearchOverlay` and remove the old `SuperDuperMod` project.
 
 ## Steam Workshop publishing
 
