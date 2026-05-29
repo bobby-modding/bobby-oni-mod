@@ -30,7 +30,7 @@ Every mod project follows this layout:
 - `*_Patches.cs` — main class extending `UserMod2` (OnLoad/OnAllModsLoaded hooks)
 - `*_Strings.cs` — `LocString`-based localized strings
 - `*_Options.cs` — `[ModInfo]` + `[Option]` attributes, JSON serialization
-- `Properties/AssemblyInfo.cs` — assembly version (all currently `2021.6.29.0`)
+- Version is managed via `<Version>` in `.csproj` — set once, flows to assembly attributes and `mod_info.yaml`
 - PLib and Newtonsoft.Json are NuGet packages (`PLib` 4.22.0, `Newtonsoft.Json` 13.0.3), add `<PackageReference>` to csproj — they are NOT in the game's Managed folder
 
 ## Framework quirks
@@ -49,6 +49,10 @@ Every mod project follows this layout:
 | Build all | `dotnet build` |
 | Build one | `dotnet build <ProjectName>` |
 | Strip game DLLs | `refasmer -v -O ./Refs -c --all "<GameDir>/*.dll"` |
+| Bump version | `dotnet version -f <Project>.csproj patch\|minor\|major` |
+| Bump (no git) | `dotnet version -f <Project>.csproj --skip-vcs patch` |
+| Preview bump | `dotnet version -f <Project>.csproj --dry-run patch` |
+| Set exact | `dotnet version -f <Project>.csproj 1.2.3` |
 
 ## Testing
 
@@ -64,5 +68,5 @@ Uses Docker + SteamCMD. See README. ONI may not support steamcmd workshop upload
 
 ## .gitignore
 
-Ignores `*.dll`, `*.pdb`, `*.csproj`, `*.sln`, `*.manifest`, `/bin/`, `/Release/`, `/Debug/`, `/References/`.  
+Ignores `*.dll`, `*.pdb`, `*.manifest`, `/bin/`, `/Release/`, `/Debug/`, `/References/`.  
 Do not commit these. Edit `.gitignore` to add new ignores.
