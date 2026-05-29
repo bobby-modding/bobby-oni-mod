@@ -29,8 +29,6 @@ Subscribe on the Steam Workshop.
 3. Matching elements appear in the dropdown — click one to see mass totals
 4. The map highlights all matches; unmatched cells appear gray
 
-Default keybind: assignable in **Controls → Overlays → Open Material Search Overlay**.
-
 ## Building from source
 
 ```bash
