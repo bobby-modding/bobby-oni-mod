@@ -54,10 +54,6 @@ docker run -it --rm --name=steamcmd_container -v $(pwd):/home/steam/steamcmd/mod
 ```
 
 ```bash
-docker run -it --rm --name=steamcmd_container -v $(pwd):/home/steam/steamcmd/modding cm2network/steamcmd /home/steam/steamcmd/steamcmd.sh +login waves599 +workshop_build_item /home/steam/steamcmd/modding/SuperDuperMod/SuperDuperMod.vdf +quit
-```
-
-```bash
 docker run -it --rm --name=steamcmd_container \
   -v $(pwd):/home/steam/steamcmd/modding \
   -v $(pwd)/logs:/home/steam/steamcmd/workshopbuilds \
