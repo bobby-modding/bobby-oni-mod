@@ -1,0 +1,25 @@
+<Project>
+  <Target Name="CustomILRepack" BeforeTargets="CopyToDevFolder">
+    <ItemGroup>
+      <InputAssemblies Include="$(OutputPath)$(TargetName)$(TargetExt)"/>
+      <InputAssemblies Include="$(OutputPath)PLib.dll"/>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <LibraryPath>$(GameLibsFolder);$(OutputPath)</LibraryPath>
+    </PropertyGroup>
+
+    <ILRepack
+        Parallel="true"
+        DebugInfo="true"
+        AllowDuplicateResources="false"
+        InputAssemblies="@(InputAssemblies)"
+        LibraryPath="$(LibraryPath)"
+        TargetKind="SameAsPrimaryAssembly"
+        KeyFile="$(KeyFile)"
+        OutputFile="$(OutputPath)$(TargetName)$(TargetExt)"
+    />
+
+    <Delete Files="$(OutputPath)PLib.dll" />
+  </Target>
+</Project>
