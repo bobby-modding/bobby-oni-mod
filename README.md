@@ -1,111 +1,48 @@
 # bobby-oni-mod
 
-```bash
-dotnet tool restore
-```
+Collection of [Oxygen Not Included](https://www.klei.com/games/oxygen-not-included) mods by [bobby-modding](https://github.com/bobby-modding).
+
+## Mods
+
+| Mod | Description |
+|---|---|
+| [Material Search Overlay](./MaterialSearchOverlay) | Search materials by name and highlight their locations on the map |
+
+More mods coming soon.
+
+## Requirements
+
+- .NET SDK (for building)
+- [Refasmer](https://www.nuget.org/packages/Refasmer) + [AssemblyPublicizer](https://www.nuget.org/packages/AssemblyPublicizer) (restored via `dotnet tool restore`)
+- ONI development install with `Refs/` directory set up
+
+## Build
 
 ```bash
-dotnet tool install -g JetBrains.Refasmer.CliTool
+dotnet tool restore                 # install build tools
+dotnet build <ProjectName>          # compile and auto-deploy to dev folder
 ```
 
-```bash
-refasmer -v -O ./Refs -c --all "/mnt/c/Program Files (x86)/Steam/steamapps/common/OxygenNotIncluded/OxygenNotIncluded_Data/Managed/"*.dll
-```
+Set `GameLibsFolder` and `ModFolder` in `Directory.Build.props.user` (see `Directory.Build.props.default` for a template).
+
+## Scaffold a new mod
 
 ```bash
 dotnet new install ./MyOniModTemplate
+dotnet new myonimodtemplate -n <Name> -o <Name>
 ```
 
-```bash
-# Create the solution
-dotnet new sln -n SuperDuperMod -o SuperDuperMod
+## Repository structure
 
-# Generate the project using your new CLI template
-dotnet new myonimodtemplate -n SuperDuperMod -o SuperDuperMod
-
-# Add it to the solution
-dotnet sln add SuperDuperMod/SuperDuperMod.csproj
+```
+├── Directory.Build.props            # shared MSBuild properties
+├── bobby-oni-mod.sln                # root solution
+├── Refs/                            # stripped game reference DLLs
+├── MaterialSearchOverlay/           # mod project
+├── MyOniModTemplate/                # dotnet new template for scaffolding
+└── AGENTS.md                        # development reference
 ```
 
-```bash
-dotnet new sln -n MaterialSearchOverlay -o MaterialSearchOverlay && dotnet new myonimodtemplate -n MaterialSearchOverlay -o MaterialSearchOverlay && dotnet sln add MaterialSearchOverlay/MaterialSearchOverlay.csproj
-```
+## License
 
-```bash
-dotnet new sln -n SuperDuperMod -o SuperDuperMod && dotnet new myonimodtemplate -n SuperDuperMod -o SuperDuperMod && dotnet sln add SuperDuperMod/SuperDuperMod.csproj
-```
-
-```bash
-dotnet build
-```
-
-```bash
-cat "/mnt/c/Users/USER/AppData/LocalLow/Klei/Oxygen Not Included/Player.log" | grep SuperDuperMod
-```
-
-<!-- https://docs.docker.com/desktop/features/wsl/ -->
-<!-- https://developer.valvesoftware.com/wiki/SteamCMD#Docker -->
-```bash
-docker run -it --rm --name=steamcmd_container -v $(pwd):/home/steam/steamcmd/modding cm2network/steamcmd bash
-```
-
-```bash
-docker run -it --rm --name=steamcmd_container -v $(pwd):/home/steam/steamcmd/modding cm2network/steamcmd /home/steam/steamcmd/steamcmd.sh +login YOUR_STEAM_USERNAME +workshop_build_item /home/steam/steamcmd/modding/MyOniModTemplate/MyOniModTemplate.vdf +quit
-```
-
-```bash
-docker run -it --rm --name=steamcmd_container \
-  -v $(pwd):/home/steam/steamcmd/modding \
-  -v $(pwd)/logs:/home/steam/steamcmd/workshopbuilds \
-  -v "/mnt/c/Program Files (x86)/Steam/steamapps":/home/steam/Steam/steamapps \
-  cm2network/steamcmd \
-  /home/steam/steamcmd/steamcmd.sh +login YOUR_STEAM_USERNAME +app_update 457140 validate +workshop_build_item /home/steam/steamcmd/modding/SuperDuperMod.vdf +quit"
-```
-
-```bash
-docker run -it --rm --name=steamcmd_container \
-  -v $(pwd):/home/steam/steamcmd/modding \
-  -v "/mnt/c/Program Files (x86)/Steam/steamapps":/home/steam/Steam/steamapps \
-  cm2network/steamcmd \
-  bash
-```
-
-
-if error find log in
-```bash
-cat ~/Steam/logs/workshop_log.txt
-```
-
-
-```bash
-.\steamcmd
-```
-
-```bash
-login YourSteamUsername
-```
-
-Then, input your password and Steam Guard code if you have 2FA enabled.
-
-
-[02:48:15.395] [1] [INFO] [SuperDuperMod] OnLoad: Before patches!
-[02:48:15.395] [1] [INFO] [SuperDuperMod] OnLoad: After patches!
-```
-
-
-https://forums.kleientertainment.com/forums/topic/116697-modding-guidelines/
-https://forums.kleientertainment.com/forums/topic/115346-unofficial-modding-guide/
-https://forums.kleientertainment.com/forums/topic/74765-creatingusing-translation-files-updated-august-22nd-2017/
-
-
-
-# SteamCmd Integration
-It is not implemented yet.
-https://partner.steamgames.com/doc/features/workshop/implementation#SteamCmd
-
-1. Go to SteamDB's page for Oxygen Not Included Depots.
-https://steamdb.info/app/457140/depots/
-2. Look at the list of Depots.
-3. Compare it to a game that does support SteamCMD uploads, like Garry's Mod (AppID 4000).
-https://steamdb.info/app/4000/depots/
-4. If you look at Garry's Mod, you will see a specific depot named "Garry's Mod Workshop" (Depot ID 4006).
+MIT
