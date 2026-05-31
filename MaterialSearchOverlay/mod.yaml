@@ -1,5 +1,5 @@
 title: "Material Search Overlay"  # set this to your mod name in the Steam Workshop. In case of non-Steam mod installation, this is what will be displayed in game as the mod title
-description: "Material Search Overlay Description" #  currently not used in game, but perhaps will be one day!
+description: "Adds a searchable overlay to find materials by name across your colony. Filter by natural tiles, debris, and buildings with mass breakdowns."
 
 # a mod's unique identifier. This needs to be globally unique, across ALL mods. 
 # Can be as simple as your mod name (with no spaces), or you can prefix it with your name. 
