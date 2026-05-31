@@ -1,0 +1,58 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Application: Oxygen Not IncludedPOT Version: 2.0\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.INPUT_BINDINGS.ROOT.MATERIALSEARCH
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.INPUT_BINDINGS.ROOT.MATERIALSEARCH"
+msgid "Open Material Search Overlay"
+msgstr "Открыть наложение поиска материалов"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.NAME
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.NAME"
+msgid "MATERIAL SEARCH OVERLAY"
+msgstr "ПОИСК МАТЕРИАЛОВ"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.DESCRIPTION
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.DESCRIPTION"
+msgid "Searches for materials by name and highlights their locations on the map."
+msgstr "Ищет материалы по имени и подсвечивает их местоположение на карте."
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.BUTTON
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.BUTTON"
+msgid "Material Search Overlay"
+msgstr "Поиск материалов"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIP
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIP"
+msgid "Search for materials by typing their name"
+msgstr "Искать материалы, вводя их название"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER"
+msgid "Type material name..."
+msgstr "Введите название материала..."
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL"
+msgid "Natural Tile: {0} |  Debris: {1} |  Buildings: {2}"
+msgstr "Природная плитка: {0} | Обломки: {1} | Здания: {2}"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIPS.MATCH
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIPS.MATCH"
+msgid "Material matches the search term"
+msgstr "Материал соответствует поисковому запросу"
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIPS.NO_MATCH
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIPS.NO_MATCH"
+msgid "Material does not match the search term"
+msgstr "Материал не соответствует поисковому запросу"

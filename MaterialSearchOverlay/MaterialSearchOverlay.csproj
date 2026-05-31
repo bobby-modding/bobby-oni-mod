@@ -65,6 +65,7 @@
   <ItemGroup>
     <None Update="mod.yaml" CopyToOutputDirectory="Always" />
     <None Update="mod_info.yaml" CopyToOutputDirectory="Always" />
+    <None Update="translations/*.po" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
 <Target Name="GenerateModInfoYaml" BeforeTargets="BeforeBuild">
@@ -90,6 +91,10 @@ APIVersion: $(ModAPIVersion)</ModInfoContent>
     <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png" DestinationFiles="$(InstallFolder)/preview.png" Condition="Exists('$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png')" />
+    <ItemGroup>
+      <TranslationFiles Include="$(MSBuildProjectDirectory)/translations/*.po" />
+    </ItemGroup>
+    <Copy SourceFiles="@(TranslationFiles)" DestinationFolder="$(InstallFolder)/translations" />
   </Target>
   
   <!--  Automatically generates the SteamCMD .vdf file for Docker steamcmd, currently not supported -->

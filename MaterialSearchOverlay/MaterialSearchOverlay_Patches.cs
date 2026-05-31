@@ -107,7 +107,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             base.OnLoad(harmony);
             PUtil.InitLibrary();
             new PPatchManager(harmony).RegisterPatchClass(typeof(Patches));
-            LocString.CreateLocStringKeys(typeof(MaterialSearchOverlayStrings.INPUT_BINDINGS));
+            LocString.CreateLocStringKeys(typeof(MaterialSearchOverlayStrings));
+            Localization.RegisterForTranslation(typeof(MaterialSearchOverlayStrings));
             OpenOverlay = new PActionManager().CreateAction(MaterialSearchOverlayStrings.
                 OVERLAY_ACTION, MaterialSearchOverlayStrings.INPUT_BINDINGS.ROOT.MATERIALSEARCH);
             new PLocalization().Register();
@@ -331,7 +332,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                     float naturalMass = CalculateTotalMass(id);
                     float debrisMass = CalculateDebrisMass(id);
                     float buildingMass = CalculateBuildingMass(id);
-                    string massStr = string.Format("Natural Tile: {0} |  Debris: {1} |  Buildings: {2}",
+                    string massStr = string.Format(MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL,
                         GameUtil.GetFormattedMass(naturalMass),
                         GameUtil.GetFormattedMass(debrisMass),
                         GameUtil.GetFormattedMass(buildingMass));

@@ -20,6 +20,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                     public static LocString TOOLTIP = "Search for materials by typing their name";
                     public static LocString SEARCH_PLACEHOLDER = "Type material name...";
 
+                    public static LocString MASS_LABEL = "Natural Tile: {0} |  Debris: {1} |  Buildings: {2}";
+
                     public static class TOOLTIPS {
                         public static LocString MATCH = "Material matches the search term";
                         public static LocString NO_MATCH = "Material does not match the search term";
