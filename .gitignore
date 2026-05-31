@@ -56,3 +56,5 @@ libs/
 ehthumbs.db
 Thumbs.db
 Directory.Build.props.user
+unity_project_export/
+AGENTS.md
