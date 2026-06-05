@@ -15,7 +15,7 @@ msgstr ""
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.INPUT_BINDINGS.ROOT.MATERIALSEARCH
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.INPUT_BINDINGS.ROOT.MATERIALSEARCH"
 msgid "Open Material Search Overlay"
-msgstr "Открыть наложение поиска материалов"
+msgstr "Открыть Поиск Материалов"
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.NAME
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.NAME"
@@ -25,7 +25,7 @@ msgstr "ПОИСК МАТЕРИАЛОВ"
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.DESCRIPTION
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.DESCRIPTION"
 msgid "Searches for materials by name and highlights their locations on the map."
-msgstr "Ищет материалы по имени и подсвечивает их местоположение на карте."
+msgstr "Ищет и подсвечивает материалы на карте по названию."
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.BUTTON
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.BUTTON"
@@ -35,7 +35,7 @@ msgstr "Поиск материалов"
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIP
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIP"
 msgid "Search for materials by typing their name"
-msgstr "Искать материалы, вводя их название"
+msgstr "Ищет материалы по названию"
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER"
@@ -45,7 +45,7 @@ msgstr "Введите название материала..."
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL"
 msgid "Natural Tile: {0} |  Debris: {1} |  Buildings: {2}"
-msgstr "Природная плитка: {0} | Обломки: {1} | Здания: {2}"
+msgstr "Натуральные Клетки: {0} | Обломки: {1} | Строения: {2}"
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIPS.MATCH
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIPS.MATCH"
