@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json.schemastore.org/template",
+  "$schema": "https://json.schemastore.org/template.json",
   "author": "Your Name",
   "classifications": ["Mod"],
   "name": "Oxygen Not Included Mod",
@@ -9,5 +9,16 @@
     "language": "C#",
     "type": "project"
   },
-  "sourceName": "MyOniModTemplate"
+  "sourceName": "MyOniModTemplate",
+  "symbols": {
+    "camelCasedStaticID": {
+      "type": "generated",
+      "generator": "casing",
+      "parameters": {
+        "source": "name",
+        "toLowerCamelCase": true
+      },
+      "replaces": "myOniModTemplate"
+    }
+  }
 }
