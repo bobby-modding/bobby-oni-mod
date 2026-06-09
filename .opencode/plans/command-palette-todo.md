@@ -89,18 +89,24 @@
 - `[NICE]` 3.6 **Context-sensitive actions:** If a building/dupe is selected, show "Copy Settings", "Disable", "Move To", "Prioritize" etc.
       - Use `SelectTool.Instance.selected` to detect selection
 
-## Phase 4: Keyboard Input & Hotkey
+## Phase 4: Keyboard Input & Hotkey ✅
 
-- `[MVP]` 4.1 Register custom keybinding via `PActionManager.CreateAction()` in `OnLoad()`
-      - Default: `Ctrl+Shift+P` (or `Shift+Space` if conflicts)
-      - Add binding string to `Strings.cs`
-- `[MVP]` 4.2 Patch `GameScreenManager` or `PlayerController` to listen for the custom action keypress
-      - Or: register a global `IInputHandler` via `KScreen` that sits above other screens
-      - Simpler: patch `OnKeyDown` on the main `KScreen` layer to catch the action
-- `[MVP]` 4.3 On hotkey press: toggle palette visibility (open if closed, close if open)
-      - Close any open management screens before showing palette
-      - Block game input while palette is active (modal-like behavior)
-- `[NICE]` 4.4 Rebindable hotkey via standard ONI keybindings menu → PLib's `PActionManager` handles this automatically
+- ✅ `[MVP]` 4.1 Register custom keybinding via `PActionManager.CreateAction()` in `OnLoad()`
+      - Default: `Ctrl+Shift+P`, stored as static `TogglePaletteAction`
+      - Added to `CommandPalleteStrings` as `ACTION_TOGGLE_PALETTE`
+- ✅ `[MVP]` 4.2 Patch `KScreenManager.OnKeyDown` (Harmony prefix) to intercept hotkey before other screens
+      - Checks `e.TryConsume(GetKAction())`, calls `CommandPalleteScreen.Toggle()` on match
+- ✅ `[MVP]` 4.3 On hotkey press: `Toggle()` opens palette (closes management screens first) or closes if already open
+      - Guarded against `Game.Instance == null` (main menu) and `Game.IsQuitting()`
+      - Parented to `GameScreenManager.Instance.ssOverlayCanvas`
+      - Modal behavior via `IsModal() = true`, `GetSortKey() = MODAL_SCREEN_SORT_KEY`
+- ✅ `[MVP]` 4.4 Rewrote `CommandPalleteScreen.cs` with PLibUI components (PLabel, PTextField, PScrollPane, PPanel, PUITuning)
+      - Eliminates manual UI creation (`CreateUIObject`/`AddComponent`)
+      - Consistent ONI-native styling via `PUITuning.Fonts`, `PUITuning.Colors`
+- ✅ `[MVP]` 4.5 Fixed two critical bugs:
+      - **Invisible palette:** parent to `ssOverlayCanvas` via `KScreenManager.AddExistingChild`
+      - **Zero results:** `Game.OnSpawn` postfix calls `CommandIndex.Instance.RebuildIndex()` on every game start
+- `[NICE]` 4.6 Rebindable hotkey via standard ONI keybindings menu → PLib's `PActionManager` handles this automatically
 
 ## Phase 5: Caching, Performance & Localization
 

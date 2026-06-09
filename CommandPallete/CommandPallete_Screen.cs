@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using PeterHan.PLib.Core;
+using PeterHan.PLib.UI;
 
 namespace CommandPallete
 {
@@ -14,15 +15,13 @@ namespace CommandPallete
 
         private TMP_InputField searchField;
         private GameObject contentContainer;
-        private TextMeshProUGUI statusText;
-
+        private LocText statusLabel;
         private List<CommandEntry> currentResults = new List<CommandEntry>();
         private int selectedIndex = -1;
         private readonly List<GameObject> resultItems = new List<GameObject>();
 
         private const int PANEL_WIDTH = 500;
         private const int PANEL_PADDING = 12;
-        private const int INPUT_HEIGHT = 28;
         private const int ITEM_HEIGHT = 28;
         private const int MAX_VISIBLE_ITEMS = 12;
 
@@ -31,11 +30,7 @@ namespace CommandPallete
         private static readonly Color INPUT_BG = new Color32(55, 55, 55, 255);
         private static readonly Color ITEM_NORMAL = new Color32(0, 0, 0, 5);
         private static readonly Color ITEM_HIGHLIGHT = new Color32(72, 100, 145, 100);
-        private static readonly Color TEXT_MAIN = Color.white;
-        private static readonly Color TEXT_HINT = new Color32(140, 140, 140, 255);
-        private static readonly Color TEXT_CATEGORY = new Color32(160, 160, 160, 255);
-        private static readonly Color SCROLL_HANDLE = new Color32(100, 100, 100, 255);
-        private static readonly Color SCROLL_BG = new Color32(45, 45, 45, 255);
+        private static readonly Color SCROLL_BG = new Color32(0, 0, 0, 30);
 
         private static readonly Dictionary<CommandCategory, Color> BADGE_COLORS = new()
         {
@@ -50,15 +45,13 @@ namespace CommandPallete
         {
             if (Game.Instance == null || Game.IsQuitting())
             {
-                Log.Debug("Toggle: Game not active (instance={0}, quitting={1}), skipping"
-                    .F(Game.Instance, Game.IsQuitting()));
+                Log.Debug("Toggle: Game not active, skipping");
                 return;
             }
 
             if (Instance != null)
             {
-                Log.Debug("Toggle: palette already open (Instance={0}), closing it"
-                    .F(Instance.GetHashCode()));
+                Log.Debug("Toggle: palette already open, closing it");
                 Instance.Deactivate();
                 return;
             }
@@ -66,32 +59,26 @@ namespace CommandPallete
             Log.Debug("Toggle: palette not open, proceeding to open");
             CloseManagementScreens();
 
+            var parent = GameScreenManager.Instance.ssOverlayCanvas.gameObject;
+
             var go = new GameObject("CommandPalleteScreen");
             go.SetActive(false);
             go.AddComponent<RectTransform>();
             var screen = go.AddComponent<CommandPalleteScreen>();
-            Log.Debug("Toggle: created CommandPalleteScreen GameObject (hash={0}), calling Activate()"
-                .F(screen.GetHashCode()));
+            KScreenManager.AddExistingChild(parent, go);
+            Log.Debug("Toggle: created CommandPalleteScreen, parented to ssOverlayCanvas");
             screen.Activate();
         }
 
         public static void Open()
         {
-            Log.Debug("Open: delegating to Toggle()");
             Toggle();
         }
 
         private static void CloseManagementScreens()
         {
-            if (ManagementMenu.Instance == null)
-            {
-                Log.Debug("CloseManagementScreens: ManagementMenu.Instance is null, nothing to close");
-                return;
-            }
-
-            Log.Debug("CloseManagementScreens: calling ManagementMenu.Instance.CloseAll()");
-            ManagementMenu.Instance.CloseAll();
-            Log.Debug("CloseManagementScreens: CloseAll() returned");
+            if (ManagementMenu.Instance != null)
+                ManagementMenu.Instance.CloseAll();
         }
 
         protected override void OnPrefabInit()
@@ -99,9 +86,6 @@ namespace CommandPallete
             base.OnPrefabInit();
             Instance = this;
             activateOnSpawn = false;
-
-            Log.Debug("OnPrefabInit: initialized CommandPalleteScreen, activateOnSpawn=false, Instance={0}"
-                .F(Instance.GetHashCode()));
 
             var rt = GetComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
@@ -116,26 +100,14 @@ namespace CommandPallete
         protected override void OnSpawn()
         {
             base.OnSpawn();
-
             Log.Debug("OnSpawn: setting up search field listeners");
 
-            searchField.onValueChanged.AddListener(text => PerformSearch(text));
-
-            searchField.onSelect.AddListener(_ =>
-            {
-                isEditing = true;
-                Log.Debug("OnSpawn: search field selected, isEditing=true");
-            });
-
-            searchField.onDeselect.AddListener(_ =>
-            {
-                isEditing = false;
-                Log.Debug("OnSpawn: search field deselected, isEditing=false");
-            });
-
             PerformSearch("");
-            searchField.ActivateInputField();
-            searchField.Select();
+            if (searchField != null)
+            {
+                searchField.ActivateInputField();
+                searchField.Select();
+            }
             Log.Debug("OnSpawn: search field focused and activated");
         }
 
@@ -146,7 +118,7 @@ namespace CommandPallete
         protected override void OnShow(bool show)
         {
             base.OnShow(show);
-            if (show)
+            if (show && searchField != null)
             {
                 searchField.ActivateInputField();
                 searchField.Select();
@@ -166,17 +138,13 @@ namespace CommandPallete
 
             if (!e.Consumed && e.TryConsume(Action.Escape))
             {
-                if (searchField.text.Length > 0)
+                if (searchField != null && searchField.text.Length > 0)
                 {
-                    Log.Debug("OnKeyDown: Escape consumed, clearing search text");
                     searchField.text = "";
                     PerformSearch("");
                 }
                 else
-                {
-                    Log.Debug("OnKeyDown: Escape consumed, search empty, closing palette");
                     Deactivate();
-                }
                 return;
             }
             if (!e.Consumed && e.TryConsume(Action.DialogSubmit))
@@ -192,6 +160,7 @@ namespace CommandPallete
         private void Update()
         {
             if (!isActiveAndEnabled) return;
+            if (isEditing) return;
 
             int resultCount = currentResults.Count;
 
@@ -202,8 +171,6 @@ namespace CommandPallete
                     if (selectedIndex < resultCount - 1)
                     {
                         selectedIndex++;
-                        Log.Debug("Update: DownArrow, selectedIndex now {0}/{1}"
-                            .F(selectedIndex, resultCount - 1));
                         UpdateSelection();
                         ScrollToSelected();
                     }
@@ -213,8 +180,6 @@ namespace CommandPallete
                     if (selectedIndex > 0)
                     {
                         selectedIndex--;
-                        Log.Debug("Update: UpArrow, selectedIndex now {0}/{1}"
-                            .F(selectedIndex, resultCount - 1));
                         UpdateSelection();
                         ScrollToSelected();
                     }
@@ -222,184 +187,99 @@ namespace CommandPallete
             }
 
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
-            {
-                Log.Debug("Update: Enter pressed, executing selected (index={0})"
-                    .F(selectedIndex));
                 ExecuteSelected();
-            }
         }
 
         private void BuildUI()
         {
-            var rt = GetComponent<RectTransform>();
-
-            var bg = CreateUIObject("Background", rt);
-            var bgImage = bg.AddComponent<Image>();
-            bgImage.color = OVERLAY_BG;
-            var bgRt = bg.GetComponent<RectTransform>();
-            bgRt.anchorMin = Vector2.zero;
-            bgRt.anchorMax = Vector2.one;
-            bgRt.offsetMin = Vector2.zero;
-            bgRt.offsetMax = Vector2.zero;
-
+            // Background overlay — click to close
+            var bg = PUIElements.CreateUI(gameObject, "Background", true,
+                PUIAnchoring.Stretch, PUIAnchoring.Stretch);
+            bg.AddComponent<Image>().color = OVERLAY_BG;
             var bgTrigger = bg.AddComponent<EventTrigger>();
-            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-            entry.callback.AddListener(_ => Deactivate());
-            bgTrigger.triggers.Add(entry);
+            var clickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+            clickEntry.callback.AddListener(_ => Deactivate());
+            bgTrigger.triggers.Add(clickEntry);
 
-            var panel = CreateUIObject("Panel", rt);
-            var panelImage = panel.AddComponent<Image>();
-            panelImage.color = PANEL_BG;
-            var panelRt = panel.GetComponent<RectTransform>();
+            // Panel — centered container
+            var panelObj = PUIElements.CreateUI(gameObject, "Panel", true,
+                PUIAnchoring.Stretch, PUIAnchoring.Stretch);
+            var panelRt = panelObj.rectTransform();
             panelRt.anchorMin = new Vector2(0.5f, 0.5f);
             panelRt.anchorMax = new Vector2(0.5f, 0.5f);
             panelRt.sizeDelta = new Vector2(PANEL_WIDTH, 0);
             panelRt.anchoredPosition = new Vector2(0, 80);
+            panelObj.AddComponent<Image>().color = PANEL_BG;
 
-            var panelLayout = panel.AddComponent<VerticalLayoutGroup>();
-            panelLayout.childAlignment = TextAnchor.UpperCenter;
-            panelLayout.childForceExpandWidth = true;
-            panelLayout.childForceExpandHeight = false;
-            panelLayout.spacing = 6;
-            panelLayout.padding = new RectOffset(PANEL_PADDING, PANEL_PADDING, PANEL_PADDING, PANEL_PADDING);
+            // Panel vertical layout
+            panelObj.AddComponent<BoxLayoutGroup>().Params = new BoxLayoutParams
+            {
+                Direction = PanelDirection.Vertical,
+                Alignment = TextAnchor.UpperCenter,
+                Spacing = 6,
+                Margin = new RectOffset(PANEL_PADDING, PANEL_PADDING,
+                    PANEL_PADDING, PANEL_PADDING)
+            };
 
-            var titleObj = CreateUIObject("Title", panel.transform);
-            var titleText = titleObj.AddComponent<TextMeshProUGUI>();
-            titleText.text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.NAME;
-            titleText.fontSize = 18;
-            titleText.color = TEXT_MAIN;
-            titleText.alignment = TextAlignmentOptions.Center;
-            titleText.raycastTarget = false;
+            // Title
+            new PLabel("Title")
+            {
+                Text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.NAME,
+                TextStyle = PUITuning.Fonts.UILightStyle,
+                TextAlignment = TextAnchor.MiddleCenter,
+                FlexSize = new Vector2(1, 0),
+                DynamicSize = true
+            }.Build().SetParent(panelObj);
 
-            searchField = BuildSearchField(panel.transform);
+            // Search input via PTextField
+            var textField = new PTextField("SearchInput")
+            {
+                PlaceholderText = (string)CommandPalleteStrings.UI.COMMANDPALETTE.SEARCH_PLACEHOLDER,
+                Text = "",
+                TextAlignment = TextAlignmentOptions.Left,
+                MinWidth = PANEL_WIDTH - 2 * PANEL_PADDING,
+                FlexSize = new Vector2(1, 0),
+                BackColor = INPUT_BG,
+                OnTextChanged = (source, text) => PerformSearch(text)
+            };
+            searchField = textField.Build().GetComponent<TMP_InputField>();
+            searchField.gameObject.SetParent(panelObj);
 
-            var statusObj = CreateUIObject("Status", panel.transform);
-            statusText = statusObj.AddComponent<TextMeshProUGUI>();
-            statusText.fontSize = 11;
-            statusText.color = TEXT_HINT;
-            statusText.alignment = TextAlignmentOptions.Center;
-            statusText.raycastTarget = false;
+            // Status text
+            var label = new PLabel("Status")
+            {
+                Text = "",
+                TextStyle = PUITuning.Fonts.UILightStyle,
+                TextAlignment = TextAnchor.MiddleCenter,
+                FlexSize = new Vector2(1, 0),
+                DynamicSize = true
+            };
+            statusLabel = label.Build().GetComponent<LocText>();
+            statusLabel.gameObject.SetParent(panelObj);
 
-            BuildResultsScrollView(panel.transform);
-        }
+            // Scrollable results: PScrollPane with PPanel child
+            var resultsPanel = new PPanel("ResultsContent")
+            {
+                Direction = PanelDirection.Vertical,
+                Alignment = TextAnchor.UpperCenter,
+                Spacing = 1,
+                DynamicSize = true,
+                FlexSize = Vector2.zero
+            };
+            resultsPanel.AddOnRealize(obj => contentContainer = obj);
 
-        private TMP_InputField BuildSearchField(Transform parent)
-        {
-            var inputObj = CreateUIObject("SearchInput", parent);
-            var inputImage = inputObj.AddComponent<Image>();
-            inputImage.color = INPUT_BG;
-            inputImage.type = Image.Type.Sliced;
-            var inputLayout = inputObj.AddComponent<LayoutElement>();
-            inputLayout.preferredHeight = INPUT_HEIGHT;
-
-            var textArea = CreateUIObject("TextArea", inputObj.transform);
-            var textAreaRt = textArea.GetComponent<RectTransform>();
-            textAreaRt.anchorMin = Vector2.zero;
-            textAreaRt.anchorMax = Vector2.one;
-            textAreaRt.offsetMin = new Vector2(8, 2);
-            textAreaRt.offsetMax = new Vector2(-8, -2);
-
-            var textObj = CreateUIObject("Text", textArea.transform);
-            var textComp = textObj.AddComponent<TextMeshProUGUI>();
-            textComp.fontSize = 14;
-            textComp.color = TEXT_MAIN;
-            textComp.alignment = TextAlignmentOptions.Left;
-            var textRt = textComp.GetComponent<RectTransform>();
-            textRt.anchorMin = Vector2.zero;
-            textRt.anchorMax = Vector2.one;
-            textRt.sizeDelta = Vector2.zero;
-
-            var placeholderObj = CreateUIObject("Placeholder", textArea.transform);
-            var placeholderComp = placeholderObj.AddComponent<TextMeshProUGUI>();
-            placeholderComp.text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.SEARCH_PLACEHOLDER;
-            placeholderComp.fontSize = 14;
-            placeholderComp.color = TEXT_HINT;
-            placeholderComp.alignment = TextAlignmentOptions.Left;
-            var placeholderRt = placeholderComp.GetComponent<RectTransform>();
-            placeholderRt.anchorMin = Vector2.zero;
-            placeholderRt.anchorMax = Vector2.one;
-            placeholderRt.sizeDelta = Vector2.zero;
-
-            var inputField = inputObj.AddComponent<TMP_InputField>();
-            inputField.textComponent = textComp;
-            inputField.placeholder = placeholderComp;
-            inputField.textViewport = textAreaRt;
-            inputField.targetGraphic = inputImage;
-
-            return inputField;
-        }
-
-        private void BuildResultsScrollView(Transform parent)
-        {
-            var scrollObj = CreateUIObject("ScrollView", parent);
-            var scrollImage = scrollObj.AddComponent<Image>();
-            scrollImage.color = new Color32(0, 0, 0, 30);
-            scrollImage.type = Image.Type.Sliced;
-            var scrollLayout = scrollObj.AddComponent<LayoutElement>();
-            scrollLayout.preferredHeight = MAX_VISIBLE_ITEMS * ITEM_HEIGHT;
-            scrollLayout.flexibleHeight = 1;
-
-            var viewport = CreateUIObject("Viewport", scrollObj.transform);
-            var viewportRt = viewport.GetComponent<RectTransform>();
-            viewportRt.anchorMin = Vector2.zero;
-            viewportRt.anchorMax = Vector2.one;
-            viewportRt.offsetMin = Vector2.zero;
-            viewportRt.offsetMax = new Vector2(-12, 0);
-
-            var viewportMask = viewport.AddComponent<RectMask2D>();
-
-            contentContainer = CreateUIObject("Content", viewport.transform);
-            var contentRt = contentContainer.GetComponent<RectTransform>();
-            contentRt.anchorMin = new Vector2(0, 1);
-            contentRt.anchorMax = Vector2.one;
-            contentRt.pivot = new Vector2(0.5f, 1);
-            contentRt.sizeDelta = new Vector2(0, 0);
-
-            var contentLayout = contentContainer.AddComponent<VerticalLayoutGroup>();
-            contentLayout.childAlignment = TextAnchor.UpperCenter;
-            contentLayout.childForceExpandWidth = true;
-            contentLayout.childForceExpandHeight = false;
-            contentLayout.spacing = 1;
-            contentLayout.padding = new RectOffset(0, 0, 0, 0);
-
-            var contentFitter = contentContainer.AddComponent<ContentSizeFitter>();
-            contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            contentFitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-
-            var scrollbarObj = CreateUIObject("Scrollbar", scrollObj.transform);
-            var scrollbarRt = scrollbarObj.GetComponent<RectTransform>();
-            scrollbarRt.anchorMin = new Vector2(1, 0);
-            scrollbarRt.anchorMax = Vector2.one;
-            scrollbarRt.offsetMin = new Vector2(-10, 0);
-            scrollbarRt.offsetMax = Vector2.zero;
-
-            var scrollbarImage = scrollbarObj.AddComponent<Image>();
-            scrollbarImage.color = SCROLL_BG;
-
-            var scrollbarHandle = CreateUIObject("Handle", scrollbarObj.transform);
-            var handleImage = scrollbarHandle.AddComponent<Image>();
-            handleImage.color = SCROLL_HANDLE;
-            var handleRt = scrollbarHandle.GetComponent<RectTransform>();
-            handleRt.anchorMin = new Vector2(0, 0);
-            handleRt.anchorMax = new Vector2(1, 1);
-            handleRt.offsetMin = Vector2.zero;
-            handleRt.offsetMax = Vector2.zero;
-
-            var scrollbar = scrollbarObj.AddComponent<Scrollbar>();
-            scrollbar.handleRect = handleRt;
-            scrollbar.targetGraphic = handleImage;
-            scrollbar.direction = Scrollbar.Direction.BottomToTop;
-            scrollbar.value = 1f;
-
-            var kScroll = scrollObj.AddComponent<KScrollRect>();
-            kScroll.content = contentRt;
-            kScroll.viewport = viewportRt;
-            kScroll.vertical = true;
-            kScroll.horizontal = false;
-            kScroll.movementType = ScrollRect.MovementType.Clamped;
-            kScroll.verticalScrollbar = scrollbar;
-            kScroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
-            kScroll.verticalScrollbarSpacing = 2;
+            var scrollPane = new PScrollPane("ScrollView")
+            {
+                Child = resultsPanel,
+                ScrollVertical = true,
+                AlwaysShowVertical = true,
+                FlexSize = new Vector2(1, 1),
+                BackColor = SCROLL_BG
+            };
+            var scrollGo = scrollPane.Build();
+            scrollGo.SetParent(panelObj);
+            scrollGo.AddComponent<LayoutElement>()
+                .preferredHeight = MAX_VISIBLE_ITEMS * ITEM_HEIGHT;
         }
 
         private void PerformSearch(string query)
@@ -407,8 +287,6 @@ namespace CommandPallete
             Log.Debug("PerformSearch: query='{0}' (length={1})".F(query, query.Length));
             currentResults = CommandIndex.Instance.FuzzySearch(query);
             selectedIndex = currentResults.Count > 0 ? 0 : -1;
-            Log.Debug("PerformSearch: got {0} results, selectedIndex={1}"
-                .F(currentResults.Count, selectedIndex));
             RebuildResultItems();
             UpdateStatusText();
         }
@@ -425,72 +303,64 @@ namespace CommandPallete
                 resultItems.Add(item);
             }
 
-            var contentRt = contentContainer.GetComponent<RectTransform>();
-            var contentSize = contentRt.sizeDelta;
-            contentSize.y = currentResults.Count * (ITEM_HEIGHT + 1);
-            contentRt.sizeDelta = contentSize;
-
             UpdateSelection();
         }
 
         private GameObject CreateResultItem(int index)
         {
             var entry = currentResults[index];
-            var item = CreateUIObject("Result_" + index, contentContainer.transform);
 
-            var itemRt = item.GetComponent<RectTransform>();
-            itemRt.anchorMin = new Vector2(0, 1);
-            itemRt.anchorMax = Vector2.one;
-            itemRt.pivot = new Vector2(0.5f, 1);
-            itemRt.sizeDelta = new Vector2(0, ITEM_HEIGHT);
+            var entryBadgeColor = BADGE_COLORS.TryGetValue(entry.Category, out var bc)
+                ? bc : Color.gray;
 
-            var itemLayout = item.AddComponent<LayoutElement>();
-            itemLayout.preferredHeight = ITEM_HEIGHT;
-            itemLayout.flexibleWidth = 1;
+            var row = new PPanel("Result_" + index)
+            {
+                Direction = PanelDirection.Horizontal,
+                Alignment = TextAnchor.MiddleLeft,
+                Spacing = 6,
+                Margin = new RectOffset(6, 6, 2, 2),
+                BackColor = ITEM_NORMAL,
+                FlexSize = new Vector2(1, 0),
+                DynamicSize = true
+            };
 
-            var itemBg = item.AddComponent<Image>();
-            itemBg.color = ITEM_NORMAL;
+            // Badge
+            row.AddChild(new PPanel("Badge")
+            {
+                BackColor = entryBadgeColor,
+                FlexSize = new Vector2(0, 0),
+                DynamicSize = false
+            });
 
-            var itemLayoutGroup = item.AddComponent<HorizontalLayoutGroup>();
-            itemLayoutGroup.childAlignment = TextAnchor.MiddleLeft;
-            itemLayoutGroup.childForceExpandWidth = false;
-            itemLayoutGroup.childForceExpandHeight = true;
-            itemLayoutGroup.spacing = 6;
-            itemLayoutGroup.padding = new RectOffset(6, 6, 2, 2);
+            // Name
+            row.AddChild(new PLabel("Name")
+            {
+                Text = entry.DisplayName,
+                TextStyle = PUITuning.Fonts.UILightStyle,
+                TextAlignment = TextAnchor.MiddleLeft,
+                FlexSize = new Vector2(1, 0),
+                DynamicSize = true
+            });
 
-            var badge = CreateUIObject("Badge", item.transform);
-            var badgeImage = badge.AddComponent<Image>();
-            if (BADGE_COLORS.TryGetValue(entry.Category, out var badgeColor))
-                badgeImage.color = badgeColor;
-            else
-                badgeImage.color = Color.gray;
-            var badgeLayout = badge.AddComponent<LayoutElement>();
-            badgeLayout.preferredWidth = 4;
-            badgeLayout.preferredHeight = 18;
-            badgeLayout.flexibleWidth = 0;
+            // Category
+            row.AddChild(new PLabel("Category")
+            {
+                Text = entry.Category.ToString(),
+                TextStyle = PUITuning.Fonts.UILightStyle,
+                TextAlignment = TextAnchor.MiddleRight,
+                FlexSize = new Vector2(0, 0),
+                DynamicSize = true
+            });
 
-            var nameObj = CreateUIObject("Name", item.transform);
-            var nameText = nameObj.AddComponent<TextMeshProUGUI>();
-            nameText.text = entry.DisplayName;
-            nameText.fontSize = 14;
-            nameText.color = TEXT_MAIN;
-            nameText.alignment = TextAlignmentOptions.Left;
-            nameText.raycastTarget = false;
-            var nameLayout = nameObj.AddComponent<LayoutElement>();
-            nameLayout.flexibleWidth = 1;
+            var rowGo = row.Build();
+            rowGo.SetParent(contentContainer);
 
-            var catObj = CreateUIObject("Category", item.transform);
-            var catText = catObj.AddComponent<TextMeshProUGUI>();
-            catText.text = entry.Category.ToString();
-            catText.fontSize = 11;
-            catText.color = TEXT_CATEGORY;
-            catText.alignment = TextAlignmentOptions.Right;
-            catText.raycastTarget = false;
+            // Click + hover events
+            var trigger = rowGo.AddComponent<EventTrigger>();
 
-            var trigger = item.AddComponent<EventTrigger>();
-
-            var clickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             int capturedIndex = index;
+            var clickEntry = new EventTrigger.Entry
+                { eventID = EventTriggerType.PointerClick };
             clickEntry.callback.AddListener(_ =>
             {
                 selectedIndex = capturedIndex;
@@ -498,7 +368,8 @@ namespace CommandPallete
             });
             trigger.triggers.Add(clickEntry);
 
-            var enterEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            var enterEntry = new EventTrigger.Entry
+                { eventID = EventTriggerType.PointerEnter };
             int capturedEnter = index;
             enterEntry.callback.AddListener(_ =>
             {
@@ -507,7 +378,7 @@ namespace CommandPallete
             });
             trigger.triggers.Add(enterEntry);
 
-            return item;
+            return rowGo;
         }
 
         private void UpdateSelection()
@@ -534,12 +405,13 @@ namespace CommandPallete
         {
             int count = currentResults.Count;
             string hints = "\u2191\u2193 navigate  \u23ce select  Esc close";
-            if (count == 0 && searchField.text.Length > 0)
-                statusText.text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.NO_RESULTS;
+            if (count == 0 && searchField != null && searchField.text.Length > 0)
+                statusLabel.text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.NO_RESULTS;
             else if (count > 0)
-                statusText.text = string.Format("{0} result{1} | {2}", count, count != 1 ? "s" : "", hints);
+                statusLabel.text = string.Format("{0} result{1} | {2}",
+                    count, count != 1 ? "s" : "", hints);
             else
-                statusText.text = hints;
+                statusLabel.text = hints;
         }
 
         private void ExecuteSelected()
@@ -550,21 +422,11 @@ namespace CommandPallete
                 Log.Debug("ExecuteSelected: executing id='{0}' name='{1}' category={2}"
                     .F(entry.Id, entry.DisplayName, entry.Category));
                 entry.Execute();
-                Log.Debug("ExecuteSelected: command execution returned, closing palette");
             }
             else
-            {
                 Log.Debug("ExecuteSelected: selectedIndex={0} out of range (results={1})"
                     .F(selectedIndex, currentResults.Count));
-            }
             Deactivate();
-        }
-
-        private static GameObject CreateUIObject(string name, Transform parent)
-        {
-            var go = new GameObject(name, typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            return go;
         }
     }
 }

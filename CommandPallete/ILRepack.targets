@@ -17,6 +17,7 @@
         LibraryPath="$(LibraryPath)"
         TargetKind="SameAsPrimaryAssembly"
         KeyFile="$(KeyFile)"
+        Internalize="true"
         OutputFile="$(OutputPath)$(TargetName)$(TargetExt)"
     />
 

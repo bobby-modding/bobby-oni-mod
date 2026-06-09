@@ -95,6 +95,19 @@ namespace CommandPallete
         }
     }
 
+    [HarmonyPatch(typeof(Game), "OnSpawn")]
+    public static class Game_OnSpawn_Patch
+    {
+        public static void Postfix()
+        {
+            if (Game.Instance == null) return;
+
+            Log.Debug("Game_OnSpawn: rebuilding command index (loadedFromSave={0})"
+                .F(SaveLoader.Instance?.loadedFromSave));
+            CommandIndex.Instance.RebuildIndex();
+        }
+    }
+
     internal static class Log
     {
         internal static bool DebugEnabled { get; set; } = true;
