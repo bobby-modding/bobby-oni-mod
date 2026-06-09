@@ -14,6 +14,7 @@ namespace CommandPallete
         public static CommandPalleteScreen Instance { get; private set; }
 
         private TMP_InputField searchField;
+        private string lastQuery = "";
         private GameObject contentContainer;
         private TextMeshProUGUI statusLabel;
         private List<CommandEntry> currentResults = new List<CommandEntry>();
@@ -135,9 +136,9 @@ namespace CommandPallete
 
         public override void OnKeyDown(KButtonEvent e)
         {
-            Log.Debug("OnKeyDown: event action={0}, consumed={1}".F(e.GetAction(), e.Consumed));
+            if (e.Consumed) return;
 
-            if (!e.Consumed && e.TryConsume(Action.Escape))
+            if (e.TryConsume(Action.Escape))
             {
                 if (searchField != null && searchField.text.Length > 0)
                 {
@@ -148,20 +149,42 @@ namespace CommandPallete
                     Deactivate();
                 return;
             }
-            if (!e.Consumed && e.TryConsume(Action.DialogSubmit))
+            if (e.TryConsume(Action.DialogSubmit))
             {
-                Log.Debug("OnKeyDown: DialogSubmit consumed, executing selected (index={0})"
+                Log.Debug("OnKeyDown: DialogSubmit, calling ExecuteSelected (idx={0})"
                     .F(selectedIndex));
                 ExecuteSelected();
                 return;
             }
+
+            // Mouse scroll wheel over results list — scroll the KScrollRect
+            bool zoomIn = e.TryConsume(Action.ZoomIn);
+            bool zoomOut = !zoomIn && e.TryConsume(Action.ZoomOut);
+            if (zoomIn || zoomOut)
+            {
+                Log.Debug("OnKeyDown: scroll wheel caught (zoomIn={0}), scrolling"
+                    .F(zoomIn));
+                float dir = zoomIn ? 0.1f : -0.1f;
+                var kScroll = GetComponentInChildren<KScrollRect>();
+                if (kScroll != null)
+                {
+                    kScroll.verticalNormalizedPosition = Mathf.Clamp01(
+                        kScroll.verticalNormalizedPosition + dir);
+                }
+                return;
+            }
+
             base.OnKeyDown(e);
         }
 
         private void Update()
         {
             if (!isActiveAndEnabled) return;
-            if (isEditing) return;
+            if (isEditing)
+            {
+                Log.Debug("Update: isEditing=true, skipping");
+                return;
+            }
 
             int resultCount = currentResults.Count;
 
@@ -172,6 +195,7 @@ namespace CommandPallete
                     if (selectedIndex < resultCount - 1)
                     {
                         selectedIndex++;
+                        Log.Debug("Update: DownArrow idx={0}".F(selectedIndex));
                         UpdateSelection();
                         ScrollToSelected();
                     }
@@ -181,6 +205,7 @@ namespace CommandPallete
                     if (selectedIndex > 0)
                     {
                         selectedIndex--;
+                        Log.Debug("Update: UpArrow idx={0}".F(selectedIndex));
                         UpdateSelection();
                         ScrollToSelected();
                     }
@@ -188,7 +213,10 @@ namespace CommandPallete
             }
 
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            {
+                Log.Debug("Update: Enter, ExecuteSelected idx={0}".F(selectedIndex));
                 ExecuteSelected();
+            }
         }
 
         private static GameObject CreateUIGameObject(string name, GameObject parent)
@@ -292,6 +320,7 @@ namespace CommandPallete
             scrollRect.vertical = true;
             scrollRect.verticalScrollbarVisibility = KScrollRect.ScrollbarVisibility
                 .AutoHideAndExpandViewport;
+            scrollRect.scrollSensitivity = 30f;
 
             // Viewport — clips the content
             var viewport = CreateUIGameObject("Viewport", scrollGo);
@@ -302,6 +331,43 @@ namespace CommandPallete
             viewportRt.anchoredPosition = Vector2.zero;
             viewport.AddComponent<RectMask2D>().enabled = true;
             scrollRect.viewport = viewportRt;
+
+            // Scrollbar — vertical
+            var scrollbarGo = CreateUIGameObject("Scrollbar", scrollGo);
+            var scrollbarRt = scrollbarGo.rectTransform();
+            scrollbarRt.anchorMin = new Vector2(1, 0);
+            scrollbarRt.anchorMax = Vector2.one;
+            scrollbarRt.sizeDelta = new Vector2(10, 0);
+            scrollbarRt.anchoredPosition = Vector2.zero;
+            var scrollbarTrack = scrollbarGo.AddComponent<Image>();
+            scrollbarTrack.color = new Color32(0, 0, 0, 60);
+            scrollbarTrack.raycastTarget = false;
+
+            // Sliding area
+            var slideGo = CreateUIGameObject("SlidingArea", scrollbarGo);
+            var slideRt = slideGo.rectTransform();
+            slideRt.anchorMin = Vector2.zero;
+            slideRt.anchorMax = Vector2.one;
+            slideRt.sizeDelta = new Vector2(-4, -4);
+            slideRt.anchoredPosition = Vector2.zero;
+
+            // Handle
+            var handleGo = CreateUIGameObject("Handle", slideGo);
+            var handleRt = handleGo.rectTransform();
+            handleRt.anchorMin = Vector2.zero;
+            handleRt.anchorMax = Vector2.one;
+            handleRt.sizeDelta = Vector2.zero;
+            var handleImg = handleGo.AddComponent<Image>();
+            handleImg.color = new Color32(160, 160, 160, 160);
+            handleImg.raycastTarget = false;
+
+            var scrollbar = scrollbarGo.AddComponent<Scrollbar>();
+            scrollbar.handleRect = handleRt;
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            scrollbar.value = 1f;
+            scrollbar.size = 0.2f;
+            scrollbar.targetGraphic = handleImg;
+            scrollRect.verticalScrollbar = scrollbar;
 
             // Content — holds result items, top-anchored, grows downward
             var contentGo = CreateUIGameObject("Content", viewport);
@@ -328,6 +394,13 @@ namespace CommandPallete
 
         private void PerformSearch(string query)
         {
+            if (query == lastQuery)
+            {
+                Log.Debug("PerformSearch: query unchanged, preserving selectedIndex={0}"
+                    .F(selectedIndex));
+                return;
+            }
+            lastQuery = query;
             Log.Debug("PerformSearch: query='{0}' (length={1})".F(query, query.Length));
             currentResults = CommandIndex.Instance.FuzzySearch(query);
             selectedIndex = currentResults.Count > 0 ? 0 : -1;
@@ -473,16 +546,15 @@ namespace CommandPallete
 
         private void ExecuteSelected()
         {
+            Log.Debug("ExecuteSelected: idx={0}, count={1}".F(selectedIndex, currentResults.Count));
             if (selectedIndex >= 0 && selectedIndex < currentResults.Count)
             {
                 var entry = currentResults[selectedIndex];
-                Log.Debug("ExecuteSelected: executing id='{0}' name='{1}' category={2}"
-                    .F(entry.Id, entry.DisplayName, entry.Category));
+                Log.Debug("ExecuteSelected: executing '{0}'".F(entry.DisplayName));
                 entry.Execute();
             }
             else
-                Log.Debug("ExecuteSelected: selectedIndex={0} out of range (results={1})"
-                    .F(selectedIndex, currentResults.Count));
+                Log.Debug("ExecuteSelected: idx {0} out of range".F(selectedIndex));
             Deactivate();
         }
     }
