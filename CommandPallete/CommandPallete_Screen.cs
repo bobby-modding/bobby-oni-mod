@@ -15,7 +15,7 @@ namespace CommandPallete
 
         private TMP_InputField searchField;
         private GameObject contentContainer;
-        private LocText statusLabel;
+        private TextMeshProUGUI statusLabel;
         private List<CommandEntry> currentResults = new List<CommandEntry>();
         private int selectedIndex = -1;
         private readonly List<GameObject> resultItems = new List<GameObject>();
@@ -102,12 +102,13 @@ namespace CommandPallete
             base.OnSpawn();
             Log.Debug("OnSpawn: setting up search field listeners");
 
-            PerformSearch("");
             if (searchField != null)
             {
+                searchField.onValueChanged.AddListener(text => PerformSearch(text));
                 searchField.ActivateInputField();
                 searchField.Select();
             }
+            PerformSearch("");
             Log.Debug("OnSpawn: search field focused and activated");
         }
 
@@ -190,46 +191,67 @@ namespace CommandPallete
                 ExecuteSelected();
         }
 
+        private static GameObject CreateUIGameObject(string name, GameObject parent)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.localScale = Vector3.one;
+            go.layer = LayerMask.NameToLayer("UI");
+            return go;
+        }
+
         private void BuildUI()
         {
             // Background overlay — click to close
-            var bg = PUIElements.CreateUI(gameObject, "Background", true,
-                PUIAnchoring.Stretch, PUIAnchoring.Stretch);
+            var bg = CreateUIGameObject("Background", gameObject);
+            var bgRt = bg.rectTransform();
+            bgRt.anchorMin = Vector2.zero;
+            bgRt.anchorMax = Vector2.one;
+            bgRt.sizeDelta = Vector2.zero;
+            bgRt.anchoredPosition = Vector2.zero;
             bg.AddComponent<Image>().color = OVERLAY_BG;
             var bgTrigger = bg.AddComponent<EventTrigger>();
             var clickEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             clickEntry.callback.AddListener(_ => Deactivate());
             bgTrigger.triggers.Add(clickEntry);
 
-            // Panel — centered container
-            var panelObj = PUIElements.CreateUI(gameObject, "Panel", true,
-                PUIAnchoring.Stretch, PUIAnchoring.Stretch);
+            // Panel — centered container with fixed width, auto height
+            var panelObj = CreateUIGameObject("Panel", gameObject);
             var panelRt = panelObj.rectTransform();
             panelRt.anchorMin = new Vector2(0.5f, 0.5f);
             panelRt.anchorMax = new Vector2(0.5f, 0.5f);
             panelRt.sizeDelta = new Vector2(PANEL_WIDTH, 0);
             panelRt.anchoredPosition = new Vector2(0, 80);
-            panelObj.AddComponent<Image>().color = PANEL_BG;
+            var panelImg = panelObj.AddComponent<Image>();
+            panelImg.color = PANEL_BG;
 
-            // Panel vertical layout
-            panelObj.AddComponent<BoxLayoutGroup>().Params = new BoxLayoutParams
-            {
-                Direction = PanelDirection.Vertical,
-                Alignment = TextAnchor.UpperCenter,
-                Spacing = 6,
-                Margin = new RectOffset(PANEL_PADDING, PANEL_PADDING,
-                    PANEL_PADDING, PANEL_PADDING)
-            };
+            // Vertical layout — Unity built-in
+            var vlg = panelObj.AddComponent<VerticalLayoutGroup>();
+            vlg.childAlignment = TextAnchor.UpperCenter;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
+            vlg.spacing = 6;
+            vlg.padding = new RectOffset(PANEL_PADDING, PANEL_PADDING,
+                PANEL_PADDING, PANEL_PADDING);
+
+            // Auto-size height to fit children
+            var panelFitter = panelObj.AddComponent<ContentSizeFitter>();
+            panelFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             // Title
-            new PLabel("Title")
-            {
-                Text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.NAME,
-                TextStyle = PUITuning.Fonts.UILightStyle,
-                TextAlignment = TextAnchor.MiddleCenter,
-                FlexSize = new Vector2(1, 0),
-                DynamicSize = true
-            }.Build().SetParent(panelObj);
+            var titleGo = CreateUIGameObject("Title", panelObj);
+            titleGo.AddComponent<LayoutElement>().flexibleWidth = 1;
+            var titleText = titleGo.AddComponent<TextMeshProUGUI>();
+            titleText.text = (string)CommandPalleteStrings.UI.COMMANDPALETTE.NAME;
+            titleText.font = PUITuning.Fonts.UILightStyle.sdfFont;
+            titleText.fontSize = PUITuning.Fonts.UILightStyle.fontSize;
+            titleText.color = PUITuning.Fonts.UILightStyle.textColor;
+            titleText.fontStyle = PUITuning.Fonts.UILightStyle.style;
+            titleText.alignment = TextAlignmentOptions.Center;
+            titleText.textWrappingMode = TextWrappingModes.NoWrap;
 
             // Search input via PTextField
             var textField = new PTextField("SearchInput")
@@ -244,42 +266,64 @@ namespace CommandPallete
             };
             searchField = textField.Build().GetComponent<TMP_InputField>();
             searchField.gameObject.SetParent(panelObj);
+            searchField.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
 
             // Status text
-            var label = new PLabel("Status")
-            {
-                Text = "",
-                TextStyle = PUITuning.Fonts.UILightStyle,
-                TextAlignment = TextAnchor.MiddleCenter,
-                FlexSize = new Vector2(1, 0),
-                DynamicSize = true
-            };
-            statusLabel = label.Build().GetComponent<LocText>();
-            statusLabel.gameObject.SetParent(panelObj);
+            var statusGo = CreateUIGameObject("Status", panelObj);
+            statusGo.AddComponent<LayoutElement>().flexibleWidth = 1;
+            statusLabel = statusGo.AddComponent<TextMeshProUGUI>();
+            statusLabel.text = "\u00A0";
+            statusLabel.font = PUITuning.Fonts.UILightStyle.sdfFont;
+            statusLabel.fontSize = PUITuning.Fonts.UILightStyle.fontSize;
+            statusLabel.color = PUITuning.Fonts.UILightStyle.textColor;
+            statusLabel.fontStyle = PUITuning.Fonts.UILightStyle.style;
+            statusLabel.alignment = TextAlignmentOptions.Center;
+            statusLabel.textWrappingMode = TextWrappingModes.NoWrap;
 
-            // Scrollable results: PScrollPane with PPanel child
-            var resultsPanel = new PPanel("ResultsContent")
-            {
-                Direction = PanelDirection.Vertical,
-                Alignment = TextAnchor.UpperCenter,
-                Spacing = 1,
-                DynamicSize = true,
-                FlexSize = Vector2.zero
-            };
-            resultsPanel.AddOnRealize(obj => contentContainer = obj);
-
-            var scrollPane = new PScrollPane("ScrollView")
-            {
-                Child = resultsPanel,
-                ScrollVertical = true,
-                AlwaysShowVertical = true,
-                FlexSize = new Vector2(1, 1),
-                BackColor = SCROLL_BG
-            };
-            var scrollGo = scrollPane.Build();
-            scrollGo.SetParent(panelObj);
+            // Scrollable results area
+            var scrollGo = CreateUIGameObject("ScrollView", panelObj);
             scrollGo.AddComponent<LayoutElement>()
                 .preferredHeight = MAX_VISIBLE_ITEMS * ITEM_HEIGHT;
+            var scrollBg = scrollGo.AddComponent<Image>();
+            scrollBg.color = SCROLL_BG;
+
+            var scrollRect = scrollGo.AddComponent<KScrollRect>();
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.verticalScrollbarVisibility = KScrollRect.ScrollbarVisibility
+                .AutoHideAndExpandViewport;
+
+            // Viewport — clips the content
+            var viewport = CreateUIGameObject("Viewport", scrollGo);
+            var viewportRt = viewport.rectTransform();
+            viewportRt.anchorMin = Vector2.zero;
+            viewportRt.anchorMax = Vector2.one;
+            viewportRt.sizeDelta = Vector2.zero;
+            viewportRt.anchoredPosition = Vector2.zero;
+            viewport.AddComponent<RectMask2D>().enabled = true;
+            scrollRect.viewport = viewportRt;
+
+            // Content — holds result items, top-anchored, grows downward
+            var contentGo = CreateUIGameObject("Content", viewport);
+            var contentRt = contentGo.rectTransform();
+            contentRt.pivot = new Vector2(0.5f, 1.0f);
+            contentRt.anchorMin = new Vector2(0, 1);
+            contentRt.anchorMax = new Vector2(1, 1);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = Vector2.zero;
+            scrollRect.content = contentRt;
+            contentContainer = contentGo;
+
+            var contentLayout = contentGo.AddComponent<VerticalLayoutGroup>();
+            contentLayout.childForceExpandWidth = true;
+            contentLayout.childForceExpandHeight = false;
+            contentLayout.childControlHeight = false;
+            contentLayout.childAlignment = TextAnchor.UpperCenter;
+            contentLayout.spacing = 1;
+            contentLayout.childScaleWidth = true;
+
+            var contentFitter = contentGo.AddComponent<ContentSizeFitter>();
+            contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         }
 
         private void PerformSearch(string query)
@@ -293,6 +337,10 @@ namespace CommandPallete
 
         private void RebuildResultItems()
         {
+            Log.Debug("RebuildResultItems: contentContainer={0}, results count={1}"
+                .F(contentContainer != null ? contentContainer.name : "null",
+                   currentResults.Count));
+
             foreach (var item in resultItems)
                 Destroy(item);
             resultItems.Clear();
@@ -303,6 +351,7 @@ namespace CommandPallete
                 resultItems.Add(item);
             }
 
+            Log.Debug("RebuildResultItems: created {0} items".F(resultItems.Count));
             UpdateSelection();
         }
 
@@ -313,47 +362,55 @@ namespace CommandPallete
             var entryBadgeColor = BADGE_COLORS.TryGetValue(entry.Category, out var bc)
                 ? bc : Color.gray;
 
-            var row = new PPanel("Result_" + index)
-            {
-                Direction = PanelDirection.Horizontal,
-                Alignment = TextAnchor.MiddleLeft,
-                Spacing = 6,
-                Margin = new RectOffset(6, 6, 2, 2),
-                BackColor = ITEM_NORMAL,
-                FlexSize = new Vector2(1, 0),
-                DynamicSize = true
-            };
+            // Row root
+            var rowGo = new GameObject("Result_" + index);
+            rowGo.transform.SetParent(contentContainer.transform, false);
+            rowGo.AddComponent<RectTransform>();
+            rowGo.AddComponent<Image>().color = ITEM_NORMAL;
+            var rowLayout = rowGo.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.childForceExpandWidth = false;
+            rowLayout.childForceExpandHeight = false;
+            rowLayout.childAlignment = TextAnchor.MiddleLeft;
+            rowLayout.spacing = 6;
+            rowLayout.padding = new RectOffset(6, 6, 2, 2);
+            rowGo.AddComponent<LayoutElement>()
+                .preferredHeight = ITEM_HEIGHT;
 
             // Badge
-            row.AddChild(new PPanel("Badge")
-            {
-                BackColor = entryBadgeColor,
-                FlexSize = new Vector2(0, 0),
-                DynamicSize = false
-            });
+            var badge = new GameObject("Badge");
+            badge.transform.SetParent(rowGo.transform, false);
+            var badgeImg = badge.AddComponent<Image>();
+            badgeImg.color = entryBadgeColor;
+            badgeImg.raycastTarget = false;
+            badge.AddComponent<LayoutElement>().preferredWidth = 4;
 
             // Name
-            row.AddChild(new PLabel("Name")
-            {
-                Text = entry.DisplayName,
-                TextStyle = PUITuning.Fonts.UILightStyle,
-                TextAlignment = TextAnchor.MiddleLeft,
-                FlexSize = new Vector2(1, 0),
-                DynamicSize = true
-            });
+            var nameGo = new GameObject("Name");
+            nameGo.transform.SetParent(rowGo.transform, false);
+            var nameText = nameGo.AddComponent<TextMeshProUGUI>();
+            nameText.text = entry.DisplayName;
+            nameText.alignment = TextAlignmentOptions.Left;
+            nameText.font = PUITuning.Fonts.UILightStyle.sdfFont;
+            nameText.fontSize = PUITuning.Fonts.UILightStyle.fontSize;
+            nameText.color = PUITuning.Fonts.UILightStyle.textColor;
+            nameText.fontStyle = PUITuning.Fonts.UILightStyle.style;
+            nameText.textWrappingMode = TextWrappingModes.NoWrap;
+            nameText.raycastTarget = false;
+            nameGo.AddComponent<LayoutElement>().flexibleWidth = 1;
 
             // Category
-            row.AddChild(new PLabel("Category")
-            {
-                Text = entry.Category.ToString(),
-                TextStyle = PUITuning.Fonts.UILightStyle,
-                TextAlignment = TextAnchor.MiddleRight,
-                FlexSize = new Vector2(0, 0),
-                DynamicSize = true
-            });
-
-            var rowGo = row.Build();
-            rowGo.SetParent(contentContainer);
+            var catGo = new GameObject("Category");
+            catGo.transform.SetParent(rowGo.transform, false);
+            var catText = catGo.AddComponent<TextMeshProUGUI>();
+            catText.text = entry.Category.ToString();
+            catText.alignment = TextAlignmentOptions.Right;
+            catText.font = PUITuning.Fonts.UILightStyle.sdfFont;
+            catText.fontSize = PUITuning.Fonts.UILightStyle.fontSize - 2;
+            catText.color = PUITuning.Fonts.UILightStyle.textColor;
+            catText.fontStyle = PUITuning.Fonts.UILightStyle.style;
+            catText.textWrappingMode = TextWrappingModes.NoWrap;
+            catText.raycastTarget = false;
+            catGo.AddComponent<LayoutElement>().preferredWidth = 60;
 
             // Click + hover events
             var trigger = rowGo.AddComponent<EventTrigger>();
