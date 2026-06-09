@@ -60,6 +60,13 @@ namespace CommandPallete
     {
         public static void Prefix(KScreenManager __instance, KButtonEvent e)
         {
+            if (Game.Instance == null || Game.IsQuitting())
+            {
+                Log.Debug("KScreenManager_OnKeyDown: Game not active (instance={0}, quitting={1}), skipping"
+                    .F(Game.Instance, Game.IsQuitting()));
+                return;
+            }
+
             if (CommandPallete_Patches.TogglePaletteAction == null)
             {
                 Log.Debug("KScreenManager_OnKeyDown: TogglePaletteAction is null, skipping");

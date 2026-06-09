@@ -48,6 +48,13 @@ namespace CommandPallete
 
         public static void Toggle()
         {
+            if (Game.Instance == null || Game.IsQuitting())
+            {
+                Log.Debug("Toggle: Game not active (instance={0}, quitting={1}), skipping"
+                    .F(Game.Instance, Game.IsQuitting()));
+                return;
+            }
+
             if (Instance != null)
             {
                 Log.Debug("Toggle: palette already open (Instance={0}), closing it"
