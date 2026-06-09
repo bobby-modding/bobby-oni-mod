@@ -9,7 +9,7 @@
     <Version>1.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
 
-    <MinimumSupportedBuild>469112</MinimumSupportedBuild>
+    <MinimumSupportedBuild>722606</MinimumSupportedBuild>
     <ModAPIVersion>2</ModAPIVersion>
 
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
@@ -75,8 +75,7 @@
 
   <Target Name="GenerateModInfoYaml" BeforeTargets="BeforeBuild">
     <PropertyGroup>
-      <ModInfoContent>supportedContent: ALL
-minimumSupportedBuild: $(MinimumSupportedBuild)
+      <ModInfoContent>minimumSupportedBuild: $(MinimumSupportedBuild)
 version: $(Version)
 APIVersion: $(ModAPIVersion)</ModInfoContent>
     </PropertyGroup>

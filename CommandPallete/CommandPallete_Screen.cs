@@ -46,19 +46,45 @@ namespace CommandPallete
             { CommandCategory.Action, new Color32(180, 140, 255, 255) },
         };
 
-        public static void Open()
+        public static void Toggle()
         {
             if (Instance != null)
             {
+                Log.Debug("Toggle: palette already open (Instance={0}), closing it"
+                    .F(Instance.GetHashCode()));
                 Instance.Deactivate();
                 return;
             }
 
+            Log.Debug("Toggle: palette not open, proceeding to open");
+            CloseManagementScreens();
+
             var go = new GameObject("CommandPalleteScreen");
             go.SetActive(false);
-            var rt = go.AddComponent<RectTransform>();
+            go.AddComponent<RectTransform>();
             var screen = go.AddComponent<CommandPalleteScreen>();
+            Log.Debug("Toggle: created CommandPalleteScreen GameObject (hash={0}), calling Activate()"
+                .F(screen.GetHashCode()));
             screen.Activate();
+        }
+
+        public static void Open()
+        {
+            Log.Debug("Open: delegating to Toggle()");
+            Toggle();
+        }
+
+        private static void CloseManagementScreens()
+        {
+            if (ManagementMenu.Instance == null)
+            {
+                Log.Debug("CloseManagementScreens: ManagementMenu.Instance is null, nothing to close");
+                return;
+            }
+
+            Log.Debug("CloseManagementScreens: calling ManagementMenu.Instance.CloseAll()");
+            ManagementMenu.Instance.CloseAll();
+            Log.Debug("CloseManagementScreens: CloseAll() returned");
         }
 
         protected override void OnPrefabInit()
@@ -67,6 +93,9 @@ namespace CommandPallete
             Instance = this;
             activateOnSpawn = false;
 
+            Log.Debug("OnPrefabInit: initialized CommandPalleteScreen, activateOnSpawn=false, Instance={0}"
+                .F(Instance.GetHashCode()));
+
             var rt = GetComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
@@ -74,27 +103,33 @@ namespace CommandPallete
             rt.offsetMax = Vector2.zero;
 
             BuildUI();
+            Log.Debug("OnPrefabInit: UI built");
         }
 
         protected override void OnSpawn()
         {
             base.OnSpawn();
 
+            Log.Debug("OnSpawn: setting up search field listeners");
+
             searchField.onValueChanged.AddListener(text => PerformSearch(text));
 
             searchField.onSelect.AddListener(_ =>
             {
                 isEditing = true;
+                Log.Debug("OnSpawn: search field selected, isEditing=true");
             });
 
             searchField.onDeselect.AddListener(_ =>
             {
                 isEditing = false;
+                Log.Debug("OnSpawn: search field deselected, isEditing=false");
             });
 
             PerformSearch("");
             searchField.ActivateInputField();
             searchField.Select();
+            Log.Debug("OnSpawn: search field focused and activated");
         }
 
         public override bool IsModal() => true;
@@ -113,27 +148,34 @@ namespace CommandPallete
 
         protected override void OnDeactivate()
         {
+            Log.Debug("OnDeactivate: clearing Instance, palette closing");
             Instance = null;
             base.OnDeactivate();
         }
 
         public override void OnKeyDown(KButtonEvent e)
         {
+            Log.Debug("OnKeyDown: event action={0}, consumed={1}".F(e.GetAction(), e.Consumed));
+
             if (!e.Consumed && e.TryConsume(Action.Escape))
             {
                 if (searchField.text.Length > 0)
                 {
+                    Log.Debug("OnKeyDown: Escape consumed, clearing search text");
                     searchField.text = "";
                     PerformSearch("");
                 }
                 else
                 {
+                    Log.Debug("OnKeyDown: Escape consumed, search empty, closing palette");
                     Deactivate();
                 }
                 return;
             }
             if (!e.Consumed && e.TryConsume(Action.DialogSubmit))
             {
+                Log.Debug("OnKeyDown: DialogSubmit consumed, executing selected (index={0})"
+                    .F(selectedIndex));
                 ExecuteSelected();
                 return;
             }
@@ -153,6 +195,8 @@ namespace CommandPallete
                     if (selectedIndex < resultCount - 1)
                     {
                         selectedIndex++;
+                        Log.Debug("Update: DownArrow, selectedIndex now {0}/{1}"
+                            .F(selectedIndex, resultCount - 1));
                         UpdateSelection();
                         ScrollToSelected();
                     }
@@ -162,6 +206,8 @@ namespace CommandPallete
                     if (selectedIndex > 0)
                     {
                         selectedIndex--;
+                        Log.Debug("Update: UpArrow, selectedIndex now {0}/{1}"
+                            .F(selectedIndex, resultCount - 1));
                         UpdateSelection();
                         ScrollToSelected();
                     }
@@ -170,6 +216,8 @@ namespace CommandPallete
 
             if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
             {
+                Log.Debug("Update: Enter pressed, executing selected (index={0})"
+                    .F(selectedIndex));
                 ExecuteSelected();
             }
         }
@@ -349,8 +397,11 @@ namespace CommandPallete
 
         private void PerformSearch(string query)
         {
+            Log.Debug("PerformSearch: query='{0}' (length={1})".F(query, query.Length));
             currentResults = CommandIndex.Instance.FuzzySearch(query);
             selectedIndex = currentResults.Count > 0 ? 0 : -1;
+            Log.Debug("PerformSearch: got {0} results, selectedIndex={1}"
+                .F(currentResults.Count, selectedIndex));
             RebuildResultItems();
             UpdateStatusText();
         }
@@ -489,8 +540,15 @@ namespace CommandPallete
             if (selectedIndex >= 0 && selectedIndex < currentResults.Count)
             {
                 var entry = currentResults[selectedIndex];
-                Log.Debug("Executing command: {0} ({1})".F(entry.DisplayName, entry.Category));
+                Log.Debug("ExecuteSelected: executing id='{0}' name='{1}' category={2}"
+                    .F(entry.Id, entry.DisplayName, entry.Category));
                 entry.Execute();
+                Log.Debug("ExecuteSelected: command execution returned, closing palette");
+            }
+            else
+            {
+                Log.Debug("ExecuteSelected: selectedIndex={0} out of range (results={1})"
+                    .F(selectedIndex, currentResults.Count));
             }
             Deactivate();
         }

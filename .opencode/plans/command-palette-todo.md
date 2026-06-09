@@ -70,18 +70,22 @@
 - `[NICE]` 2.7 Category filtering — type `@build` or `@overlay` prefix to filter by category
 - `[NICE]` 2.8 Show building category path (e.g., "Base → Ladders → Plastic Ladder") as subtitle in result rows
 
-## Phase 3: Command Execution
+## Phase 3: Command Execution ✅
 
-- `[MVP]` 3.1 **Execute building:** `BuildTool.Instance.Activate(def, selectedElements, facade)` — use default elements (first available material)
-      - Close existing PlanScreen recipe first (`PlanScreen.Instance.CloseRecipe()`)
-      - Auto-switch to correct overlay (`def.ViewMode`)
-- `[MVP]` 3.2 **Execute tool:** iterate `PlayerController.Instance.tools`, match by `tool.name` → `ActivateTool()`
-      - Handle special cases: Cancel tool, Deconstruct, etc.
-- `[MVP]` 3.3 **Execute overlay:** `OverlayScreen.Instance.ToggleOverlay(modeId)` — with null check on `OverlayScreen.Instance`
-      - Close palette after execution
-- `[MVP]` 3.4 **Execute screen:** call appropriate `ManagementMenu.Instance.Toggle*()` method or `GameScreenManager.Instance.StartScreen()`
-      - Handle screens that are already open (close them instead? or bring to front)
-- `[MVP]` 3.5 After command execution: close palette, return to game with appropriate tool/overlay active
+- ✅ `[MVP]` 3.1 **Execute building:** `BuildTool.Instance.Activate(def, selectedElements, facade)` — use default elements (first available material)
+      - ✅ Close existing PlanScreen recipe first (`PlanScreen.Instance.CloseRecipe()`)
+      - ✅ Auto-switch to correct overlay (`def.ViewMode`)
+      - ✅ Null-guard `BuildTool.Instance`, validate `def.DefaultElements()` non-empty, try-catch wrapper
+- ✅ `[MVP]` 3.2 **Execute tool:** iterate `PlayerController.Instance.tools`, match by `tool.GetType().Name` → `ActivateTool()`
+      - ✅ Extracted `ExecuteTool()` helper with null checks on `PlayerController.Instance`/`.tools`
+      - ✅ Handles Cancel tool, Deconstruct, and all other tools generically via type-name matching
+      - ✅ Logs if tool not found
+- ✅ `[MVP]` 3.3 **Execute overlay:** `OverlayScreen.Instance.ToggleOverlay(modeId)` — with null check on `OverlayScreen.Instance`
+      - ✅ Extracted `ExecuteOverlay()` helper, try-catch wrapper
+- ✅ `[MVP]` 3.4 **Execute screen:** call appropriate `ManagementMenu.Instance.Toggle*()` method
+      - ✅ Extracted `ExecuteScreen(Action<ManagementMenu>)` helper, null-check `ManagementMenu.Instance`
+      - ✅ Schedule/Consumables use `Traverse` for private fields (`scheduleInfo`, `consumablesInfo`)
+- ✅ `[MVP]` 3.5 After command execution: close palette (`Deactivate()`), return to game with appropriate tool/overlay active
 - `[NICE]` 3.6 **Context-sensitive actions:** If a building/dupe is selected, show "Copy Settings", "Disable", "Move To", "Prioritize" etc.
       - Use `SelectTool.Instance.selected` to detect selection
 
