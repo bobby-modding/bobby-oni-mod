@@ -39,8 +39,7 @@ dotnet new myonimodtemplate -n <Name> -o <Name>
 ├── bobby-oni-mod.sln                # root solution
 ├── Refs/                            # stripped game reference DLLs
 ├── MaterialSearchOverlay/           # mod project
-├── MyOniModTemplate/                # dotnet new template for scaffolding
-└── AGENTS.md                        # development reference
+└── MyOniModTemplate/                # dotnet new template for scaffolding
 ```
 
 ## License
