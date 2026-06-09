@@ -100,13 +100,33 @@ namespace CommandPallete
 
         private static void ExecuteBuilding(BuildingDef def)
         {
-            if (PlanScreen.Instance != null)
-                PlanScreen.Instance.CloseRecipe();
+            try
+            {
+                if (PlanScreen.Instance != null)
+                    PlanScreen.Instance.CloseRecipe();
 
-            if (def.ViewMode.IsValid && OverlayScreen.Instance != null)
-                OverlayScreen.Instance.ToggleOverlay(def.ViewMode);
+                if (def.ViewMode.IsValid && OverlayScreen.Instance != null)
+                    OverlayScreen.Instance.ToggleOverlay(def.ViewMode);
 
-            BuildTool.Instance.Activate(def, def.DefaultElements());
+                if (BuildTool.Instance == null)
+                {
+                    Log.Debug("BuildTool.Instance is null, cannot activate building");
+                    return;
+                }
+
+                var elements = def.DefaultElements();
+                if (elements == null || elements.Count == 0)
+                {
+                    Log.Debug("No default elements for building: " + def.Name);
+                    return;
+                }
+
+                BuildTool.Instance.Activate(def, elements);
+            }
+            catch (Exception e)
+            {
+                Log.Debug("Failed to execute building command: " + e.Message);
+            }
         }
 
         #endregion
@@ -140,17 +160,37 @@ namespace CommandPallete
 
                 commands.Add(new CommandEntry(id, displayName, CommandCategory.Tool, () =>
                 {
-                    var pc = PlayerController.Instance;
-                    if (pc?.tools == null) return;
-                    foreach (var tool in pc.tools)
-                    {
-                        if (tool != null && tool.GetType().Name == toolTypeName)
-                        {
-                            pc.ActivateTool(tool);
-                            return;
-                        }
-                    }
+                    ExecuteTool(toolTypeName, displayName);
                 }));
+            }
+        }
+
+        private static void ExecuteTool(string toolTypeName, string displayName)
+        {
+            try
+            {
+                var pc = PlayerController.Instance;
+                if (pc == null || pc.tools == null)
+                {
+                    Log.Debug("PlayerController not available for tool: " + displayName);
+                    return;
+                }
+
+                foreach (var tool in pc.tools)
+                {
+                    if (tool == null) continue;
+                    if (tool.GetType().Name == toolTypeName)
+                    {
+                        pc.ActivateTool(tool);
+                        return;
+                    }
+                }
+
+                Log.Debug("Tool not found: " + displayName + " (type: " + toolTypeName + ")");
+            }
+            catch (Exception e)
+            {
+                Log.Debug("Failed to execute tool command (" + displayName + "): " + e.Message);
             }
         }
 
@@ -179,11 +219,8 @@ namespace CommandPallete
 
         private static void AddOverlays(List<CommandEntry> commands)
         {
-            if (OverlayScreen.Instance == null)
-                return;
-
             commands.Add(new CommandEntry("overlay_none", "Clear Overlay", CommandCategory.Overlay,
-                () => OverlayScreen.Instance.ToggleOverlay(OverlayModes.None.ID),
+                () => ExecuteOverlay(OverlayModes.None.ID),
                 new[] { "none", "off", "hide" }));
 
             foreach (var entry in OverlayEntries)
@@ -193,7 +230,24 @@ namespace CommandPallete
                 var capturedModeId = entry.modeId;
 
                 commands.Add(new CommandEntry(id, displayName, CommandCategory.Overlay,
-                    () => OverlayScreen.Instance.ToggleOverlay(capturedModeId)));
+                    () => ExecuteOverlay(capturedModeId)));
+            }
+        }
+
+        private static void ExecuteOverlay(HashedString modeId)
+        {
+            try
+            {
+                if (OverlayScreen.Instance == null)
+                {
+                    Log.Debug("OverlayScreen.Instance is null, cannot switch overlay");
+                    return;
+                }
+                OverlayScreen.Instance.ToggleOverlay(modeId);
+            }
+            catch (Exception e)
+            {
+                Log.Debug("Failed to execute overlay command: " + e.Message);
             }
         }
 
@@ -203,42 +257,57 @@ namespace CommandPallete
 
         private static void AddScreens(List<CommandEntry> commands)
         {
-            var mm = ManagementMenu.Instance;
-            if (mm == null) return;
-
             commands.Add(new CommandEntry("screen_priorities",
                 Strings.Get("STRINGS.UI.JOBS"), CommandCategory.Screen,
-                () => mm.TogglePriorities(),
+                () => ExecuteScreen(mm => mm.TogglePriorities()),
                 new[] { "jobs", "priority" }));
 
             commands.Add(new CommandEntry("screen_schedule",
                 Strings.Get("STRINGS.UI.SCHEDULE"), CommandCategory.Screen,
-                () => ToggleManagementScreen(mm, "scheduleInfo"),
+                () => ExecuteScreen(mm => ToggleManagementScreen(mm, "scheduleInfo")),
                 new[] { "schedules" }));
 
             commands.Add(new CommandEntry("screen_skills",
                 Strings.Get("STRINGS.UI.SKILLS"), CommandCategory.Screen,
-                () => mm.ToggleSkills(),
+                () => ExecuteScreen(mm => mm.ToggleSkills()),
                 new[] { "skill", "duplicant skills" }));
 
             commands.Add(new CommandEntry("screen_consumables",
                 Strings.Get("STRINGS.UI.CONSUMABLES"), CommandCategory.Screen,
-                () => ToggleManagementScreen(mm, "consumablesInfo")));
+                () => ExecuteScreen(mm => ToggleManagementScreen(mm, "consumablesInfo"))));
 
             commands.Add(new CommandEntry("screen_starmap",
                 Strings.Get("STRINGS.UI.STARMAP.MANAGEMENT_BUTTON"), CommandCategory.Screen,
-                () => mm.ToggleStarmap(),
+                () => ExecuteScreen(mm => mm.ToggleStarmap()),
                 new[] { "map", "space", "cluster" }));
 
             commands.Add(new CommandEntry("screen_research",
                 Strings.Get("STRINGS.UI.RESEARCH"), CommandCategory.Screen,
-                () => mm.ToggleResearch(),
+                () => ExecuteScreen(mm => mm.ToggleResearch()),
                 new[] { "tech", "science" }));
 
             commands.Add(new CommandEntry("screen_database",
                 Strings.Get("STRINGS.UI.CODEX.MANAGEMENT_BUTTON"), CommandCategory.Screen,
-                () => mm.ToggleCodex(),
+                () => ExecuteScreen(mm => mm.ToggleCodex()),
                 new[] { "codex" }));
+        }
+
+        private static void ExecuteScreen(Action<ManagementMenu> screenAction)
+        {
+            try
+            {
+                var mm = ManagementMenu.Instance;
+                if (mm == null)
+                {
+                    Log.Debug("ManagementMenu.Instance is null, cannot open screen");
+                    return;
+                }
+                screenAction(mm);
+            }
+            catch (Exception e)
+            {
+                Log.Debug("Failed to execute screen command: " + e.Message);
+            }
         }
 
         private static void ToggleManagementScreen(ManagementMenu mm, string toggleInfoField)
