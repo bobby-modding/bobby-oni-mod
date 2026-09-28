@@ -17,6 +17,11 @@ using TMPro;
 
 using StatusItemOverlays = StatusItem.StatusItemOverlays;
 
+// The strings class nests one level per lookup group, so these aliases keep the
+// per kind lookups in the dropdown and label code readable.
+using MSearch = BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH;
+using MSearchTypes = BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES;
+
 namespace BobbyModding.MaterialSearchOverlay {
     public sealed class Patches : KMod.UserMod2 {
         private const BindingFlags INSTANCE_ALL = PPatchTools.BASE_FLAGS | BindingFlags.
@@ -32,16 +37,78 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         internal static GameObject MassLabel { get; private set; }
 
+        private static bool ShowTypeBadges = true;
+
         private static readonly Type OVERLAY_TYPE = typeof(OverlayMenu).GetNestedType(
             "OverlayToggleInfo", INSTANCE_ALL);
 
         private static readonly RegisterMode REGISTER_MODE = typeof(OverlayScreen).
             Detour<RegisterMode>();
 
+        /// <summary>
+        /// Resource name of the mod's own overlay icon, matching the LogicalName the csproj
+        /// embeds it under. Kept in step with that attribute by hand, as it is the one thing
+        /// that cannot be checked by the compiler.
+        /// </summary>
+        private const string ICON_RESOURCE =
+            "BobbyModding.MaterialSearchOverlay.overlay_material_search.png";
+
+        /// <summary>
+        /// Vanilla icon to fall back on, so a missing or unreadable image leaves a working
+        /// button instead of a blank one.
+        /// </summary>
+        private const string FALLBACK_ICON = "overlay_materials";
+
+        [PLibMethod(RunAt.BeforeDbInit)]
+        internal static void RegisterOverlayIcon() {
+            var sprite = LoadIcon();
+            if (sprite == null) {
+                PUtil.LogWarning("Unable to load {0} - falling back to {1}".F(ICON_RESOURCE,
+                    FALLBACK_ICON));
+                sprite = Assets.GetSprite(FALLBACK_ICON);
+            }
+            if (sprite == null) {
+                PUtil.LogWarning("Unable to register the overlay icon");
+                return;
+            }
+            // PUIUtils names a loaded sprite after its resource file. The name is what both
+            // the overlay bar toggle and the overlay legend look it up by, so it has to be
+            // the one they were built to ask for.
+            sprite.name = MaterialSearchOverlayStrings.OVERLAY_ICON;
+            // Indexer, not Add: a second db init in one process would throw on the duplicate.
+            Assets.Sprites[MaterialSearchOverlayStrings.OVERLAY_ICON] = sprite;
+            Log.Debug("RegisterOverlayIcon: '{0}' {1}x{2} from {3}".F(sprite.name,
+                sprite.rect.width, sprite.rect.height, ICON_RESOURCE));
+        }
+
+        /// <summary>
+        /// Reads the embedded icon, or null if it is missing or unreadable.
+        /// </summary>
+        /// <remarks>
+        /// PUIUtils throws on both of those rather than returning null, and this runs from a
+        /// PLib lifecycle callback: an exception escaping here would unwind out of
+        /// <c>Db.Initialize</c> and take the whole database init with it. A missing icon is
+        /// not worth that, so it is caught and reported as a warning.
+        /// </remarks>
+        private static Sprite LoadIcon() {
+            try {
+                var sprite = PUIUtils.LoadSprite(ICON_RESOURCE);
+                // LoadImage reports unreadable data by leaving the texture at its initial
+                // 2x2 size rather than by failing, which would otherwise register a
+                // two pixel icon as if it had loaded.
+                if (sprite != null && sprite.rect.width < 4) {
+                    PUtil.LogWarning("{0} is not a readable image".F(ICON_RESOURCE));
+                    return null;
+                }
+                return sprite;
+            } catch (Exception e) {
+                PUtil.LogExcWarn(e);
+                return null;
+            }
+        }
+
         [PLibMethod(RunAt.AfterDbInit)]
         internal static void AfterDbInit() {
-            Assets.Sprites.Add(MaterialSearchOverlayStrings.OVERLAY_ICON,
-                Assets.GetSprite("overlay_materials"));
             var elements = ElementLoader.elements;
             var names = new Dictionary<SimHashes, string>(elements.Count);
             var displayNames = new Dictionary<SimHashes, string>(elements.Count);
@@ -51,7 +118,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                         names.ContainsKey(element.id))
                     continue;
                 string rawName = element.name;
-                string cleanName = STRINGS.UI.StripLinkFormatting(rawName);
+                string cleanName = SearchEntry.Clean(rawName);
                 Log.Debug("AfterDbInit: {0} '{1}' → '{2}'".F(element.id, rawName, cleanName));
                 names[element.id] = cleanName.ToUpperInvariant();
                 displayNames[element.id] = cleanName;
@@ -63,6 +130,21 @@ namespace BobbyModding.MaterialSearchOverlay {
             MaterialSearchOverlay.ElementColors = colors;
             Log.Debug("AfterDbInit: loaded {0} elements, e.g. 'Sand'→'{1}'".F(names.Count,
                 names.TryGetValue(SimHashes.Sand, out var s) ? s : "MISSING"));
+            // Everything else is indexed in one pass so the dropdown can match equipment,
+            // duplicants, boosters, critters, food, plants, industrial products and
+            // artifacts from the same text box as the elements.
+            SearchIndex.Build();
+        }
+
+        /// <summary>
+        /// Fires on every world load, so the save-dependent half of the search index is
+        /// re-armed each time. Without this, loading a second save in the same session would
+        /// keep showing the first save's DLC-filtered equipment, boosters and foods, because
+        /// AfterDbInit only ever runs once per process.
+        /// </summary>
+        [PLibMethod(RunAt.OnStartGame)]
+        internal static void OnStartGame() {
+            SearchIndex.InvalidateWorld();
         }
 
         private static KIconToggleMenu.ToggleInfo CreateOverlayInfo(string text,
@@ -116,6 +198,7 @@ namespace BobbyModding.MaterialSearchOverlay {
             var opts = POptions.ReadSettings<MaterialSearchOverlayOptions>() ??
                 new MaterialSearchOverlayOptions();
             Log.DebugEnabled = opts.EnableDebugLogging;
+            ShowTypeBadges = opts.ShowTypeBadges;
             new POptions().RegisterOptions(this, typeof(MaterialSearchOverlayOptions));
             if (PPatchTools.TryGetFieldValue<IDictionary<HashedString, StatusItemOverlays>>(
                     typeof(StatusItem), "overlayBitfieldMap", out var overlayBits)) {
@@ -132,8 +215,6 @@ namespace BobbyModding.MaterialSearchOverlay {
             private static TMP_InputField SearchInput;
 
             private static bool suppressDropdown;
-
-            private static readonly int MAX_DROPDOWN_ITEMS = 25;
 
             internal static void Prefix(ICollection<OverlayLegend.OverlayInfo> ___overlayInfoList) {
                 int before = ___overlayInfoList.Count;
@@ -170,9 +251,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                             Log.Debug("onValueChanged: text='{0}' trimmed='{1}' searchText='{2}' suppressDropdown={3}".F(
                                 text, trimmed, searchText ?? "null", suppressDropdown));
                             if (MaterialSearchOverlay.Instance != null) {
-                                MaterialSearchOverlay.Instance.SelectedElementId = null;
-                                MaterialSearchOverlay.Instance.SearchText = searchText;
-                                MaterialSearchOverlay.Instance.RefreshHighlights();
+                                MaterialSearchOverlay.Instance.SetSearchText(searchText);
                                 Game.Instance.ForceOverlayUpdate();
                                 Log.Debug("onValueChanged: ForceOverlayUpdate called");
                             }
@@ -204,7 +283,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                 massText.raycastTarget = false;
                 var massLayout = massLabelObj.AddComponent<LayoutElement>();
                 massLayout.flexibleWidth = 1;
-                massLayout.minHeight = 20;
+                // Room for a mass breakdown plus a per kind count line
+                massLayout.minHeight = 52;
                 massLabelObj.SetActive(false);
                 MassLabel = massLabelObj;
                 Log.Debug("Postfix: MassLabel built");
@@ -226,6 +306,10 @@ namespace BobbyModding.MaterialSearchOverlay {
 
             private static void PopulateDropdown(string text) {
                 Log.Debug("PopulateDropdown ENTER: text='{0}'".F(text));
+                if (DropdownItemsParent == null) {
+                    Log.Debug("PopulateDropdown: DropdownItemsParent is null, returning early");
+                    return;
+                }
                 Patches.DropdownContainer.SetActive(false);
                 for (int i = DropdownItemsParent.childCount - 1; i >= 0; i--)
                     UnityEngine.Object.DestroyImmediate(DropdownItemsParent.
@@ -236,37 +320,22 @@ namespace BobbyModding.MaterialSearchOverlay {
                     return;
                 }
                 string upper = text.Trim().ToUpperInvariant();
-                var names = MaterialSearchOverlay.ElementNames;
-                var matches = new List<(SimHashes id, string upper)>(
-                    Mathf.Min(MAX_DROPDOWN_ITEMS, names.Count));
-                foreach (var kvp in names) {
-                    if (kvp.Value.Contains(upper))
-                        matches.Add((kvp.Key, kvp.Value));
-                }
+                var matches = SearchIndex.Match(upper);
                 Log.Debug("PopulateDropdown: found {0} matches for '{1}'".F(matches.Count, upper));
                 if (matches.Count == 0) {
                     Log.Debug("PopulateDropdown: no matches, returning early");
                     return;
                 }
-                matches.Sort((a, b) => a.upper.CompareTo(b.upper));
-                if (matches.Count > MAX_DROPDOWN_ITEMS)
-                    matches = matches.GetRange(0, MAX_DROPDOWN_ITEMS);
-                var displays = MaterialSearchOverlay.ElementDisplayNames;
-                var colors = MaterialSearchOverlay.ElementColors;
-                foreach (var (id, upName) in matches) {
-                    string displayName = displays.TryGetValue(id, out var dn) ? dn :
-                        upName;
-                    Color swatch = colors.TryGetValue(id, out var c) ? c :
-                        Color.gray;
-                    CreateDropdownRow(id, displayName, swatch);
-                }
+                foreach (var entry in matches)
+                    CreateDropdownRow(entry);
                 Patches.DropdownContainer.SetActive(true);
-                Log.Debug("PopulateDropdown EXIT: showing {0} items".F(matches.Count));
+                Log.Debug("PopulateDropdown EXIT: showing {0} rows".F(matches.Count));
             }
 
-            private static void CreateDropdownRow(SimHashes id, string name,
-                    Color swatchColor) {
-                Log.Debug("CreateDropdownRow: id={0} name='{1}' swatch={2}".F(id, name, swatchColor));
+            private static void CreateDropdownRow(SearchEntry entry) {
+                string name = entry.DisplayName;
+                Color swatch = entry.Swatch;
+                Log.Debug("CreateDropdownRow: {0} '{1}' swatch={2}".F(entry.Kind, name, swatch));
                 var row = new GameObject("Row_" + name);
                 row.transform.SetParent(DropdownItemsParent, false);
                 var layout = row.AddComponent<HorizontalLayoutGroup>();
@@ -277,14 +346,19 @@ namespace BobbyModding.MaterialSearchOverlay {
                 layout.childForceExpandHeight = false;
                 var bg = row.AddComponent<Image>();
                 bg.color = new Color(0, 0, 0, 0.01f);
-                var swatch = new GameObject("Swatch");
-                swatch.transform.SetParent(row.transform, false);
-                var swatchImg = swatch.AddComponent<Image>();
-                swatchImg.color = swatchColor;
+                var swatchObj = new GameObject("Swatch");
+                swatchObj.transform.SetParent(row.transform, false);
+                var swatchImg = swatchObj.AddComponent<Image>();
+                swatchImg.color = swatch;
                 swatchImg.raycastTarget = false;
-                var swatchLayout = swatch.AddComponent<LayoutElement>();
+                var swatchLayout = swatchObj.AddComponent<LayoutElement>();
                 swatchLayout.preferredWidth = 14;
                 swatchLayout.preferredHeight = 14;
+                // Skip the badge when it would just repeat the row name, as the plain
+                // "Duplicant" row would otherwise read "Duplicant | Duplicant".
+                var typeLabel = TypeLabel(entry.Kind);
+                if (ShowTypeBadges && !string.Equals(typeLabel, name, StringComparison.Ordinal))
+                    AddTypeBadge(row, entry.Kind, typeLabel);
                 var label = new GameObject("Name");
                 label.transform.SetParent(row.transform, false);
                 var tmpText = label.AddComponent<TextMeshProUGUI>();
@@ -300,8 +374,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                     eventID = EventTriggerType.PointerClick
                 };
                 click.callback.AddListener(_ => {
-                    Log.Debug("PointerClick: id={0} name='{1}' calling OnElementSelected".F(id, name));
-                    OnElementSelected(id, name);
+                    Log.Debug("PointerClick: '{0}' calling SelectEntry".F(name));
+                    OnResultSelected(entry);
                 });
                 trigger.triggers.Add(click);
                 var enter = new EventTrigger.Entry {
@@ -322,45 +396,154 @@ namespace BobbyModding.MaterialSearchOverlay {
                 trigger.triggers.Add(exit);
             }
 
-            private static void OnElementSelected(SimHashes id, string name) {
-                Log.Debug("OnElementSelected ENTER: id={0} name='{1}'".F(id, name));
-                Log.Debug("OnElementSelected: setting suppressDropdown=true");
-                suppressDropdown = true;
-                if (MaterialSearchOverlay.Instance != null) {
-                    MaterialSearchOverlay.Instance.SelectedElementId = id;
-                    MaterialSearchOverlay.Instance.RefreshHighlights();
-                    float naturalMass = CalculateTotalMass(id);
-                    float debrisMass = CalculateDebrisMass(id);
-                    float buildingMass = CalculateBuildingMass(id);
-                    string massStr = string.Format(MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL,
-                        GameUtil.GetFormattedMass(naturalMass),
-                        GameUtil.GetFormattedMass(debrisMass),
-                        GameUtil.GetFormattedMass(buildingMass));
-                    Log.Debug("OnElementSelected: natural={0} debris={1} buildings={2} formatted='{3}'".F(
-                        naturalMass, debrisMass, buildingMass, massStr));
-                    if (MassLabel != null) {
-                        MassLabel.GetComponent<TextMeshProUGUI>().text = massStr;
-                        MassLabel.SetActive(true);
-                    }
-                    Log.Debug("OnElementSelected: calling ForceOverlayUpdate");
-                    Game.Instance.ForceOverlayUpdate();
-                    Log.Debug("OnElementSelected: ForceOverlayUpdate returned");
-                } else
-                    Log.Debug("OnElementSelected: Instance IS NULL");
-                if (SearchInput != null) {
-                    Log.Debug("OnElementSelected: SearchInput.text BEFORE='{0}'".F(SearchInput.text));
-                    SearchInput.SetTextWithoutNotify(name);
-                    Log.Debug("OnElementSelected: SearchInput.text AFTER='{0}'".F(SearchInput.text));
-                } else
-                    Log.Debug("OnElementSelected: SearchInput IS NULL");
-                Log.Debug("OnElementSelected: hiding dropdown");
-                Patches.DropdownContainer?.SetActive(false);
-                Log.Debug("OnElementSelected: setting suppressDropdown=false");
-                suppressDropdown = false;
-                Log.Debug("OnElementSelected EXIT");
+            /// <summary>
+            /// Short kind label on a dropdown row, so "Fish" as a food and "Pacu" as a
+            /// creature are distinguishable when several kinds share a name.
+            /// </summary>
+            private static void AddTypeBadge(GameObject row, TargetKind kind, string label) {
+                var badge = new GameObject("Type");
+                badge.transform.SetParent(row.transform, false);
+                var badgeText = badge.AddComponent<TextMeshProUGUI>();
+                badgeText.text = label;
+                badgeText.fontSize = 10;
+                badgeText.color = SearchIndex.SwatchFor(kind);
+                badgeText.alignment = TextAlignmentOptions.Left;
+                badgeText.raycastTarget = false;
+                var badgeLayout = badge.AddComponent<LayoutElement>();
+                badgeLayout.preferredWidth = 58;
             }
 
-            private static float CalculateTotalMass(SimHashes elementId) {
+            private static string TypeLabel(TargetKind kind) {
+                switch (kind) {
+                case TargetKind.Material: return MSearchTypes.MATERIAL;
+                case TargetKind.Equipment: return MSearchTypes.EQUIPMENT;
+                case TargetKind.Duplicant: return MSearchTypes.DUPLICANT;
+                case TargetKind.Bionic: return MSearchTypes.BIONIC;
+                case TargetKind.Booster: return MSearchTypes.BOOSTER;
+                case TargetKind.Critter: return MSearchTypes.CRITTER;
+                case TargetKind.Food: return MSearchTypes.FOOD;
+                case TargetKind.Plant: return MSearchTypes.PLANT;
+                case TargetKind.Industrial: return MSearchTypes.INDUSTRIAL;
+                default: return MSearchTypes.ARTIFACT;
+                }
+            }
+
+            private static void OnResultSelected(SearchEntry entry) {
+                Log.Debug("OnResultSelected ENTER: entry={0}".F(
+                    entry?.DisplayName ?? "null"));
+                suppressDropdown = true;
+                if (MaterialSearchOverlay.Instance != null) {
+                    MaterialSearchOverlay.Instance.SelectEntry(entry);
+                    ShowResultLabel();
+                    Log.Debug("OnResultSelected: calling ForceOverlayUpdate");
+                    Game.Instance.ForceOverlayUpdate();
+                    Log.Debug("OnResultSelected: ForceOverlayUpdate returned");
+                } else
+                    Log.Debug("OnResultSelected: Instance IS NULL");
+                if (SearchInput != null) {
+                    Log.Debug("OnResultSelected: SearchInput.text BEFORE='{0}'".F(SearchInput.text));
+                    SearchInput.SetTextWithoutNotify(entry?.DisplayName);
+                    Log.Debug("OnResultSelected: SearchInput.text AFTER='{0}'".F(SearchInput.text));
+                } else
+                    Log.Debug("OnResultSelected: SearchInput IS NULL");
+                Log.Debug("OnResultSelected: hiding dropdown");
+                Patches.DropdownContainer?.SetActive(false);
+                suppressDropdown = false;
+                Log.Debug("OnResultSelected EXIT");
+            }
+
+            /// <summary>
+            /// Elements keep the mass breakdown they always had. Everything else only reports
+            /// how many were found per kind, which is far more useful than a mass figure for
+            /// a duplicant.
+            /// </summary>
+            private static void ShowResultLabel() {
+                var overlay = MaterialSearchOverlay.Instance;
+                if (overlay == null || MassLabel == null)
+                    return;
+                var matches = overlay.Matches;
+                if (matches == null || matches.IsEmpty) {
+                    SetLabelText(MSearch.NO_MATCHES_LABEL);
+                    return;
+                }
+                // A query can resolve to both an element and a live entity, e.g. a plant
+                // whose name is also a food. Both lines are kept in that case rather than
+                // letting one hide the other.
+                var lines = new List<string>(2);
+                if (matches.Elements.Count > 0) {
+                    float backwallMass = 0f;
+                    foreach (var elementId in matches.Elements)
+                        backwallMass += MaterialSearchOverlay.BackwallMass(elementId);
+                    lines.Add(FormatMassLabel(CalculateTotalMass(matches.Elements),
+                        CalculateDebrisMass(matches.Elements),
+                        CalculateBuildingMass(matches.Elements), backwallMass));
+                }
+                string counts = FormatCountLabel();
+                if (counts != null)
+                    lines.Add(counts);
+                SetLabelText(lines.Count > 0 ? string.Join("\n", lines) :
+                    MSearch.NO_MATCHES_LABEL);
+            }
+
+            private static void SetLabelText(string text) {
+                MassLabel.GetComponent<TextMeshProUGUI>().text = text;
+                MassLabel.SetActive(true);
+            }
+
+            private static string FormatCountLabel() {
+                var parts = new List<string>(6);
+                AppendCount(parts, TargetKind.Duplicant);
+                AppendCount(parts, TargetKind.Bionic);
+                AppendCount(parts, TargetKind.Booster);
+                AppendCount(parts, TargetKind.Critter);
+                AppendCount(parts, TargetKind.Equipment);
+                AppendCount(parts, TargetKind.Food);
+                AppendCount(parts, TargetKind.Plant);
+                AppendCount(parts, TargetKind.Industrial);
+                AppendCount(parts, TargetKind.Artifact);
+                if (parts.Count == 0) {
+                    // Something matched the search but none of it exists in the colony yet,
+                    // so there is nothing to report a count for.
+                    return null;
+                }
+                return string.Format(MSearch.COUNT_LABEL, string.Join(", ", parts));
+            }
+
+            private static void AppendCount(List<string> parts, TargetKind kind) {
+                int count = SearchHighlighter.CountFor(kind);
+                if (count > 0)
+                    parts.Add(string.Format(CountLabel(kind), count));
+            }
+
+            private static LocString CountLabel(TargetKind kind) {
+                switch (kind) {
+                case TargetKind.Material: return MSearch.COUNT_MATERIAL;
+                case TargetKind.Equipment: return MSearch.COUNT_EQUIPMENT;
+                case TargetKind.Duplicant: return MSearch.COUNT_DUPLICANT;
+                case TargetKind.Bionic: return MSearch.COUNT_BIONIC;
+                case TargetKind.Booster: return MSearch.COUNT_BOOSTER;
+                case TargetKind.Critter: return MSearch.COUNT_CRITTER;
+                case TargetKind.Food: return MSearch.COUNT_FOOD;
+                case TargetKind.Plant: return MSearch.COUNT_PLANT;
+                case TargetKind.Industrial: return MSearch.COUNT_INDUSTRIAL;
+                default: return MSearch.COUNT_ARTIFACT;
+                }
+            }
+
+            /// <summary>
+            /// The game only accepts a translation whose placeholders match the English
+            /// string, so these patterns can be formatted directly.
+            /// </summary>
+            private static string FormatMassLabel(float naturalMass, float debrisMass,
+                    float buildingMass, float backwallMass) {
+                return string.Format(MSearch.MASS_LABEL,
+                    GameUtil.GetFormattedMass(naturalMass),
+                    GameUtil.GetFormattedMass(debrisMass),
+                    GameUtil.GetFormattedMass(buildingMass),
+                    GameUtil.GetFormattedMass(backwallMass));
+            }
+
+            private static float CalculateTotalMass(HashSet<SimHashes> elementIds) {
                 int worldId = ClusterManager.Instance.activeWorldId;
                 float mass = 0f;
                 for (int cell = 0; cell < Grid.CellCount; cell++) {
@@ -368,37 +551,46 @@ namespace BobbyModding.MaterialSearchOverlay {
                         continue;
                     if (Grid.Visible[cell] <= 20)
                         continue;
-                    if (Grid.Element[cell]?.id == elementId)
+                    var element = Grid.Element[cell];
+                    if (element != null && elementIds.Contains(element.id))
                         mass += Grid.Mass[cell];
                 }
                 return mass;
             }
 
-            private static float CalculateDebrisMass(SimHashes elementId) {
+            private static float CalculateDebrisMass(HashSet<SimHashes> elementIds) {
                 int worldId = ClusterManager.Instance.activeWorldId;
                 float mass = 0f;
-                foreach (var pickupable in Components.Pickupables.Items) {
-                    var pe = pickupable.GetComponent<PrimaryElement>();
-                    if (pe == null || pe.ElementID != elementId)
+                var pickupables = Components.Pickupables.Items;
+                for (int i = 0; i < pickupables.Count; i++) {
+                    var pe = pickupables[i].GetComponent<PrimaryElement>();
+                    if (pe == null || !elementIds.Contains(pe.ElementID))
                         continue;
-                    int cell = Grid.PosToCell(pickupable);
+                    int cell = Grid.PosToCell(pickupables[i]);
                     if ((int)Grid.WorldIdx[cell] != worldId)
+                        continue;
+                    // Explored space only, same as the other two walks.
+                    if (Grid.Visible[cell] <= 20)
                         continue;
                     mass += pe.Mass;
                 }
                 return mass;
             }
 
-            private static float CalculateBuildingMass(SimHashes elementId) {
+            private static float CalculateBuildingMass(HashSet<SimHashes> elementIds) {
                 int worldId = ClusterManager.Instance.activeWorldId;
                 float mass = 0f;
-                foreach (var building in Components.BuildingCompletes.Items) {
-                    var pe = building.GetComponent<PrimaryElement>();
-                    if (pe == null || pe.ElementID != elementId)
+                var buildings = Components.BuildingCompletes.Items;
+                for (int i = 0; i < buildings.Count; i++) {
+                    var pe = buildings[i].GetComponent<PrimaryElement>();
+                    if (pe == null || !elementIds.Contains(pe.ElementID))
                         continue;
-                    int cell = Grid.PosToCell(building);
+                    int cell = Grid.PosToCell(buildings[i]);
                     if ((int)Grid.WorldIdx[cell] != worldId)
                         continue;
+                    // Explored space only, matching what the highlighter can light up. All
+                    // three walks are filtered the same way, so a mass figure and the set of
+                    // things it describes never disagree.
                     if (Grid.Visible[cell] <= 20)
                         continue;
                     mass += pe.Mass;
