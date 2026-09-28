@@ -41,20 +41,13 @@
     <None Update="mod_info.yaml" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
-<Target Name="CopyToDevFolder" AfterTargets="Build">
-    <PropertyGroup>
-      <InstallFolder>$(ModFolder)/$(ProjectName)</InstallFolder>
-    </PropertyGroup>
+  <!--
+    Archive + deploy live in the shared root targets file so every mod project (and new mods
+    generated from this template) behaves the same: the build is archived per game build, then
+    that archive is what gets deployed to the local Dev mods folder.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('OniModDeploy.targets', '$(MSBuildThisFileDirectory)../'))" />
 
-    <Message Text="Copying mod files to $(InstallFolder)..." Importance="high" />
-
-    <MakeDir Directories="$(InstallFolder)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(InstallFolder)" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/MyOniModTemplate_Preview.png" DestinationFiles="$(InstallFolder)/preview.png" Condition="Exists('$(MSBuildProjectDirectory)/MyOniModTemplate_Preview.png')" />
-  </Target>
-  
   <!--  Automatically generates the SteamCMD .vdf file for Docker steamcmd, currently not supported -->
   <!-- <Target Name="GenerateSteamVDF" AfterTargets="Build">
     <PropertyGroup>

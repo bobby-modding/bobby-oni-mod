@@ -1,0 +1,102 @@
+<Project>
+  <!--
+    Post-build archive + deploy, shared by every mod project in this repo.
+
+    A successful build is archived to archived_versions/u<update>_<build>/, keyed on the
+    installed game build, and that archived copy is what gets copied into the local Dev mods
+    folder. Archiving first keeps the deployed folder and the archive from drifting apart, and
+    rebuilding against a game build that already has an archive refreshes it in place instead of
+    piling up near-duplicates.
+
+    Files are copied, never cleaned, so config.json the game writes into a deployed folder (and
+    anything else a mod accumulates) survives both the archive and the deploy.
+
+    The game build is read from the game's Player.log ("Build: U59-744825-SCRPAN"), the only
+    place the installed build number is recorded as text. GameLogFile defaults to a guess that
+    resolves on Linux/macOS; on Windows the log lives under AppData\LocalLow, so set GameLogFile
+    in Directory.Build.props.user. Without a readable log the archive falls back to a folder keyed
+    on MinimumSupportedBuild, which is never a real game build.
+
+    Anything that has to touch the repacked DLL (ILRepack) must hook BeforeTargets="ArchiveBuild".
+  -->
+
+  <PropertyGroup>
+    <ArchiveFolder Condition=" '$(ArchiveFolder)' == '' ">$(MSBuildProjectDirectory)/archived_versions</ArchiveFolder>
+    <GameLogFile Condition=" '$(GameLogFile)' == '' ">$([System.IO.Path]::GetFullPath('$(ModFolder)/../../Player.log'))</GameLogFile>
+  </PropertyGroup>
+
+  <Target Name="DetectGameBuild">
+    <PropertyGroup>
+      <!-- Set here, not at evaluation time: IntermediateOutputPath is filled in by the SDK targets. -->
+      <GameBuildTagFile>$(IntermediateOutputPath)game_build_tag.txt</GameBuildTagFile>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <Delete Files="$(GameBuildTagFile)" />
+
+    <Exec Command="grep -oaE &quot;Build: U[0-9]+-[0-9]+&quot; &quot;$(GameLogFile)&quot; | grep -oaE &quot;U[0-9]+-[0-9]+&quot; | tail -n 1 &gt; &quot;$(GameBuildTagFile)&quot;"
+          Condition="Exists('$(GameLogFile)') AND '$(OS)' != 'Windows_NT'"
+          ContinueOnError="WarnAndContinue" />
+    <Exec Command="powershell -NoProfile -Command &quot;$m = Select-String -Path '$(GameLogFile)' -Pattern 'Build: U[0-9]+-[0-9]+' -AllMatches; if ($m) { $m[-1].Matches[0].Value | Set-Content -Path '$(GameBuildTagFile)' }&quot;"
+          Condition="Exists('$(GameLogFile)') AND '$(OS)' == 'Windows_NT'"
+          ContinueOnError="WarnAndContinue" />
+
+    <ReadLinesFromFile File="$(GameBuildTagFile)" Condition="Exists('$(GameBuildTagFile)')">
+      <Output TaskParameter="Lines" ItemName="GameBuildTag" />
+    </ReadLinesFromFile>
+
+    <PropertyGroup>
+      <GameBuildTagText>@(GameBuildTag->'%(Identity)')</GameBuildTagText>
+      <!-- u59_744825, matching the folders created by hand before this target existed -->
+      <GameBuildArchiveName Condition=" '$(GameBuildTagText)' != '' ">$([System.String]::Copy('$(GameBuildTagText)').ToLowerInvariant().Replace('-', '_'))</GameBuildArchiveName>
+      <GameBuildArchiveName Condition=" '$(GameBuildArchiveName)' == '' AND '$(MinimumSupportedBuild)' != '' ">minbuild_$(MinimumSupportedBuild)</GameBuildArchiveName>
+      <GameBuildArchiveName Condition=" '$(GameBuildArchiveName)' == '' ">unknown</GameBuildArchiveName>
+      <GameBuildArchiveFolder>$(ArchiveFolder)/$(GameBuildArchiveName)</GameBuildArchiveFolder>
+    </PropertyGroup>
+
+    <Warning Condition=" '$(GameBuildTagText)' == '' "
+             Text="No game build found in $(GameLogFile); archiving as '$(GameBuildArchiveName)'. Run the game once, or set GameLogFile in Directory.Build.props.user, to key archives on the real game build." />
+  </Target>
+
+  <Target Name="ArchiveBuild" AfterTargets="Build" DependsOnTargets="DetectGameBuild">
+    <ItemGroup>
+      <ArchiveTranslation Include="$(MSBuildProjectDirectory)/translations/*.po" />
+    </ItemGroup>
+
+    <Message Text="Archiving $(Version) for game build $(GameBuildArchiveName) in $(GameBuildArchiveFolder)..." Importance="high" />
+
+    <MakeDir Directories="$(GameBuildArchiveFolder)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameBuildArchiveFolder)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(GameBuildArchiveFolder)"
+      Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml" DestinationFolder="$(GameBuildArchiveFolder)"
+      Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/$(ProjectName)_Preview.png"
+      DestinationFiles="$(GameBuildArchiveFolder)/preview.png"
+      Condition="Exists('$(MSBuildProjectDirectory)/$(ProjectName)_Preview.png')" />
+    <Copy SourceFiles="@(ArchiveTranslation)" DestinationFolder="$(GameBuildArchiveFolder)/translations" />
+  </Target>
+
+  <Target Name="CopyToDevFolder" AfterTargets="ArchiveBuild">
+    <PropertyGroup>
+      <InstallFolder>$(ModFolder)/$(ProjectName)</InstallFolder>
+    </PropertyGroup>
+    <ItemGroup>
+      <ArchivedTranslation Include="$(GameBuildArchiveFolder)/translations/*.po" />
+    </ItemGroup>
+
+    <Message Text="Copying mod files to $(InstallFolder)..." Importance="high" />
+
+    <MakeDir Directories="$(InstallFolder)" />
+    <Copy SourceFiles="$(GameBuildArchiveFolder)/$(TargetFileName)" DestinationFolder="$(InstallFolder)" />
+    <Copy SourceFiles="$(GameBuildArchiveFolder)/mod.yaml" DestinationFolder="$(InstallFolder)"
+      Condition="Exists('$(GameBuildArchiveFolder)/mod.yaml')" />
+    <Copy SourceFiles="$(GameBuildArchiveFolder)/mod_info.yaml" DestinationFolder="$(InstallFolder)"
+      Condition="Exists('$(GameBuildArchiveFolder)/mod_info.yaml')" />
+    <Copy SourceFiles="$(GameBuildArchiveFolder)/preview.png"
+      DestinationFiles="$(InstallFolder)/preview.png"
+      Condition="Exists('$(GameBuildArchiveFolder)/preview.png')" />
+    <Copy SourceFiles="@(ArchivedTranslation)" DestinationFolder="$(InstallFolder)/translations" />
+  </Target>
+
+</Project>

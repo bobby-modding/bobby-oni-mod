@@ -87,28 +87,12 @@
     <Message Text="Generated mod_info.yaml (version $(Version))" Importance="high" />
   </Target>
 
-  <Target Name="CopyToDevFolder" AfterTargets="Build">
-    <PropertyGroup>
-      <InstallFolder>$(ModFolder)/$(ProjectName)</InstallFolder>
-    </PropertyGroup>
-
-    <Message Text="Copying mod files to $(InstallFolder)..." Importance="high" />
-
-    <MakeDir Directories="$(InstallFolder)" />
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(InstallFolder)" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(InstallFolder)"
-      Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml"
-      DestinationFolder="$(InstallFolder)"
-      Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png"
-      DestinationFiles="$(InstallFolder)/preview.png"
-      Condition="Exists('$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png')" />
-    <ItemGroup>
-      <TranslationFiles Include="$(MSBuildProjectDirectory)/translations/*.po" />
-    </ItemGroup>
-    <Copy SourceFiles="@(TranslationFiles)" DestinationFolder="$(InstallFolder)/translations" />
-  </Target>
+  <!--
+    Archive + deploy live in the shared root targets file so every mod project (and the
+    template new mods are generated from) behaves the same: the build is archived per game
+    build, then that archive is what gets deployed to the local Dev mods folder.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('OniModDeploy.targets', '$(MSBuildThisFileDirectory)../'))" />
 
   <!--  Automatically generates the SteamCMD .vdf file for Docker steamcmd, currently not supported -->
   <!-- <Target Name="GenerateSteamVDF" AfterTargets="Build">

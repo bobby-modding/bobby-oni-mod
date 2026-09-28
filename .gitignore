@@ -58,3 +58,10 @@ Thumbs.db
 Directory.Build.props.user
 unity_project_export/
 AGENTS.md
+
+# --- Archived per-game-build packages ---
+# archived_versions/ is written by the build (see OniModDeploy.targets) and is versioned, so the
+# dll of a mod built for an older game build stays recoverable. The game-written config.json in
+# there is local state, not build output, so it stays untracked.
+!**/archived_versions/**/*.dll
+**/archived_versions/**/config.json

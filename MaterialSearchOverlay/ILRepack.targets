@@ -1,5 +1,7 @@
 <Project>
-  <Target Name="CustomILRepack" BeforeTargets="CopyToDevFolder">
+  <!-- Must run before ArchiveBuild: archiving (and the dev copy that reads the archive) has to
+       see the merged assembly, not the one still missing PLib. -->
+  <Target Name="CustomILRepack" BeforeTargets="ArchiveBuild">
     <ItemGroup>
       <InputAssemblies Include="$(OutputPath)$(TargetName)$(TargetExt)"/>
       <InputAssemblies Include="$(OutputPath)PLib.dll"/>
