@@ -1,0 +1,8 @@
+title: "Material Search Overlay"  # set this to your mod name in the Steam Workshop. In case of non-Steam mod installation, this is what will be displayed in game as the mod title
+description: "Adds a searchable overlay to find materials, equipment, duplicants, bionic duplicants, boosters, critters, food, plants, industrial products and artifacts by name across your colony. Duplicants are matched by model rather than by name, so 'Duplicant' and 'Bionic Duplicant' light up each half of your colony. Filter by natural tiles, debris, and buildings with mass breakdowns. Matched entities stay highlighted as they move; anything created later appears the next time you search."
+
+# a mod's unique identifier. This needs to be globally unique, across ALL mods. 
+# Can be as simple as your mod name (with no spaces), or you can prefix it with your name. 
+# IMPORTANT: Once you publish the mod - don't change this value. 
+# This is used for mod compatibility - the game will use this ID to create and name a Harmony instance for your mod, and other mods can refer to yours by this ID
+staticID: "materialsearchoverlay"  
