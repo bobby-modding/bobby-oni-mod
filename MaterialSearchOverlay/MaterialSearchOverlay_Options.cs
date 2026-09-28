@@ -9,8 +9,13 @@ namespace BobbyModding.MaterialSearchOverlay {
         [JsonProperty]
         public bool EnableDebugLogging { get; set; }
 
+        [Option("Show Type Badges", "Shows what kind of thing each search result is, next to its name")]
+        [JsonProperty]
+        public bool ShowTypeBadges { get; set; }
+
         public MaterialSearchOverlayOptions() {
             EnableDebugLogging = false;
+            ShowTypeBadges = true;
         }
     }
 }
