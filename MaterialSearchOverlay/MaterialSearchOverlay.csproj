@@ -2,20 +2,20 @@
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    
+
     <RootNamespace>MaterialSearchOverlay</RootNamespace>
     <AssemblyName>MaterialSearchOverlay</AssemblyName>
-    
-    <Version>1.0.1</Version>
+
+    <Version>1.3.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
 
-    <MinimumSupportedBuild>469112</MinimumSupportedBuild>
+    <MinimumSupportedBuild>722606</MinimumSupportedBuild>
     <ModAPIVersion>2</ModAPIVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PLib" Version="4.22.0">
+    <PackageReference Include="PLib" Version="4.25.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.40">
@@ -63,19 +63,27 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      The overlay icon is embedded rather than deployed as a loose file so the mod never has
+      to locate its own folder at runtime. Include, not Update: the SDK's default png glob
+      skips files that are already listed, so this is the only copy, and a missing icon then
+      fails the build (CS1566) instead of quietly shipping without one. The LogicalName
+      overrides the default of RootNamespace + path (MaterialSearchOverlay...), which is not
+      the code namespace Patches refers to it by.
+    -->
+    <EmbeddedResource Include="icons/overlay_material_search.png"
+      LogicalName="BobbyModding.MaterialSearchOverlay.overlay_material_search.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="mod.yaml" CopyToOutputDirectory="Always" />
     <None Update="mod_info.yaml" CopyToOutputDirectory="Always" />
     <None Update="translations/*.po" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
-<Target Name="GenerateModInfoYaml" BeforeTargets="BeforeBuild">
-    <PropertyGroup>
-      <ModInfoContent>supportedContent: ALL
-minimumSupportedBuild: $(MinimumSupportedBuild)
-version: $(Version)
-APIVersion: $(ModAPIVersion)</ModInfoContent>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(MSBuildProjectDirectory)/mod_info.yaml" Lines="$(ModInfoContent)" Overwrite="true" />
+  <Target Name="GenerateModInfoYaml" BeforeTargets="BeforeBuild">
+    <WriteLinesToFile File="$(MSBuildProjectDirectory)/mod_info.yaml" Overwrite="true"
+      Lines="supportedContent: ALL;minimumSupportedBuild: $(MinimumSupportedBuild);version: $(Version);APIVersion: $(ModAPIVersion)" />
     <Message Text="Generated mod_info.yaml (version $(Version))" Importance="high" />
   </Target>
 
@@ -88,24 +96,28 @@ APIVersion: $(ModAPIVersion)</ModInfoContent>
 
     <MakeDir Directories="$(InstallFolder)" />
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(InstallFolder)" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml" DestinationFolder="$(InstallFolder)" Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png" DestinationFiles="$(InstallFolder)/preview.png" Condition="Exists('$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod.yaml" DestinationFolder="$(InstallFolder)"
+      Condition="Exists('$(MSBuildProjectDirectory)/mod.yaml')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/mod_info.yaml"
+      DestinationFolder="$(InstallFolder)"
+      Condition="Exists('$(MSBuildProjectDirectory)/mod_info.yaml')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png"
+      DestinationFiles="$(InstallFolder)/preview.png"
+      Condition="Exists('$(MSBuildProjectDirectory)/MaterialSearchOverlay_Preview.png')" />
     <ItemGroup>
       <TranslationFiles Include="$(MSBuildProjectDirectory)/translations/*.po" />
     </ItemGroup>
     <Copy SourceFiles="@(TranslationFiles)" DestinationFolder="$(InstallFolder)/translations" />
   </Target>
-  
+
   <!--  Automatically generates the SteamCMD .vdf file for Docker steamcmd, currently not supported -->
   <!-- <Target Name="GenerateSteamVDF" AfterTargets="Build">
     <PropertyGroup>
       <WorkshopId></WorkshopId>
 
       <VdfFilePath>$(ProjectDir)$(ProjectName).vdf</VdfFilePath>
-
-      <DockerContentFolder>/home/steam/steamcmd/modding/$(ProjectName)/$([System.String]::Copy('$(OutputPath)').Replace('\','/'))</DockerContentFolder>
-      <DockerPreviewFile>/home/steam/steamcmd/modding/$(ProjectName)/$(ProjectName)_Preview.png</DockerPreviewFile>
+  <DockerContentFolder>/home/steam/steamcmd/modding/$(ProjectName)/$([System.String]::Copy('$(OutputPath)').Replace('\','/'))</DockerContentFolder>
+  <DockerPreviewFile>/home/steam/steamcmd/modding/$(ProjectName)/$(ProjectName)_Preview.png</DockerPreviewFile>
     </PropertyGroup>
 
     <ItemGroup>
