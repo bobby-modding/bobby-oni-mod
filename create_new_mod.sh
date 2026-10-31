@@ -18,9 +18,10 @@ fi
 echo "Setting up new mod: $MOD_NAME..."
 
 # 3. Execute the dotnet commands using the variable
+dotnet new install ./MyOniModTemplate --force && \
 dotnet new sln -n "$MOD_NAME" -o "$MOD_NAME" && \
 dotnet new myonimodtemplate -n "$MOD_NAME" -o "$MOD_NAME" && \
-dotnet sln "$MOD_NAME/$MOD_NAME.sln" add "$MOD_NAME/$MOD_NAME.csproj"
+dotnet sln "$MOD_NAME/$MOD_NAME.slnx" add "$MOD_NAME/$MOD_NAME.csproj"
 
 # 4. Confirm success
 if [ $? -eq 0 ]; then
