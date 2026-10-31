@@ -7,6 +7,7 @@ Collection of [Oxygen Not Included](https://www.klei.com/games/oxygen-not-includ
 | Mod | Description |
 |---|---|
 | [Material Search Overlay](./MaterialSearchOverlay) | Search materials by name and highlight their locations on the map |
+| [No Limit Timer Sensor](./NoLimitTimerSensor) | Raises the Timer Sensor duration limits, with configurable maximum seconds and cycles |
 
 More mods coming soon.
 

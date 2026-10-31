@@ -1,0 +1,63 @@
+[h1]No Limit Timer Sensor[/h1]
+
+Make maximum timer limit configurable duration beyond the default 600 seconds, or 10 cycles.
+
+[h2]Recommend Mod[/h2]
+[list]
+[*][url=https://steamcommunity.com/sharedfiles/filedetails/id=2904048344]Configurable Timers[/url] - With this mod, you can adjust current counting time
+[*][url=https://steamcommunity.com/sharedfiles/filedetails/id=2277619848]No Sensor Limits[/url] - Might override "maximum cycles" but not "maximum seconds"
+[/list]
+
+[h2]Well Known Issue[/h2]
+[list]
+[*]In-game simulation effectively does timeElapsedInCurrentState += 1/30. As that value grows, the float step gets coarser. Above 1,048,576 s (~1,748 cycles), adding 1/30 can round to zero, so the timer can effectively freeze.
+[*]Even before that, drift is significant: simulating the game's float addition gives +95(late 0.32%) s at 30,000 s, -269(early 0.67%) s at 40,000 s, and -1,306 s (2.2% early) at 60,000 s. 
+[*]It is recommended to keep timer settings under 60,000 seconds(or 10 100 cycles) to ensure accurate counting.
+[/list]
+
+Simulated Drift & Error Rates Table
+[table]
+[tr]
+[th]Timer Show Counting from 0 to ...[/th]
+[th]In Game Actual Time Pass[/th]
+[th]Error Rate[/th]
+[/tr]
+[tr]
+[td]600s (1 cycle)[/td]
+[td]~600.1s[/td]
+[td]+0.02%[/td]
+[/tr]
+[tr]
+[td]6,000s (10 cycles)[/td]
+[td]~6,000.9s[/td]
+[td]+0.02%[/td]
+[/tr]
+[tr]
+[td]30,000s (50 cycles)[/td]
+[td]~30,095s[/td]
+[td]+0.32%[/td]
+[/tr]
+[tr]
+[td]60,000s (100 cycles)[/td]
+[td]~58,694s[/td]
+[td]-2.18%[/td]
+[/tr]
+[tr]
+[td]1,000,000s (~1,667 cycles)[/td]
+[td]~806,991s[/td]
+[td]-19.30%[/td]
+[/tr]
+[tr]
+[td]≥1,048,576s (≥1,748 cycles)[/td]
+[td]Freezes[/td]
+[td]Stops Counting[/td]
+[/tr]
+[/table]
+
+[h2]Credits[/h2]
+[list]
+[*][url=https://github.com/peterhaneve/ONIMods]PLib[/url]
+[/list]
+
+[h2]Links[/h2]
+[url=https://github.com/bobby-modding/bobby-oni-mod]GitHub[/url]
