@@ -44,6 +44,14 @@ jobs:
             cd ..
           fi
 
+          if [ -d "NoLimitTimerSensor" ]; then
+            cd NoLimitTimerSensor
+            # If your build outputs to bin/Release or a specific folder, adjust below.
+            # Here we zip the mod source/output files needed for distribution.
+            zip -r ../release_output/NoLimitTimerSensor.zip . -x "*.git*" "bin/*" "obj/*" ".vs/*"
+            cd ..
+          fi
+
       - name: Create GitHub Release & Upload Assets
         uses: softprops/action-gh-release@v2
         with:
