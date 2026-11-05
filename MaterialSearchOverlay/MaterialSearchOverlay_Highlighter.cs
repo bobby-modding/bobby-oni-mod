@@ -12,10 +12,10 @@ namespace BobbyModding.MaterialSearchOverlay {
         internal readonly HashSet<SimHashes> Elements = new HashSet<SimHashes>();
 
         /// <summary>
-        /// Prefab tags for equipment, food, plants, industrial products and artifacts, kept
-        /// per kind rather than in one flat set. A generic sweep over loose items has to work
-        /// out what an entity actually is before it can report a count for it, and a single
-        /// flattened set would lose that.
+        /// Prefab tags for equipment, food, plants, industrial products, artifacts and critter
+        /// eggs, kept per kind rather than in one flat set. A generic sweep over loose items has
+        /// to work out what an entity actually is before it can report a count for it, and a
+        /// single flattened set would lose that.
         /// </summary>
         private readonly Dictionary<TargetKind, HashSet<Tag>> prefabs =
             new Dictionary<TargetKind, HashSet<Tag>>();
@@ -37,8 +37,12 @@ namespace BobbyModding.MaterialSearchOverlay {
                 return TargetKind.Artifact;
             if (HasPrefab(TargetKind.Plant, prefabTag))
                 return TargetKind.Plant;
+            if (HasPrefab(TargetKind.Seed, prefabTag))
+                return TargetKind.Seed;
             if (HasPrefab(TargetKind.Food, prefabTag))
                 return TargetKind.Food;
+            if (HasPrefab(TargetKind.Egg, prefabTag))
+                return TargetKind.Egg;
             if (HasPrefab(TargetKind.Industrial, prefabTag))
                 return TargetKind.Industrial;
             return null;
@@ -151,18 +155,91 @@ namespace BobbyModding.MaterialSearchOverlay {
     /// </summary>
     internal static class SearchHighlighter {
         /// <summary>
-        /// Matched entity count per kind, for the info label. Keyed by GameObject rather than
-        /// by component instance: an entity is routinely reachable through several of its own
+        /// Matched entities per kind, for the info label. Keyed by GameObject rather than by
+        /// component instance: an entity is routinely reachable through several of its own
         /// components (a plant is a Uprootable, a Harvestable and a Pickupable; a piece of
         /// equipment is both an Equippable and a Pickupable), and a per component set counted
-        /// a single object two or three times.
+        /// a single object two or three times. <see cref="CountFor"/> turns these objects into
+        /// item counts, expanding merged stacks.
         /// </summary>
         private static readonly Dictionary<TargetKind, HashSet<GameObject>> counted =
             new Dictionary<TargetKind, HashSet<GameObject>>();
 
-        /// <summary>Counts of matched entities by kind; zero when the kind did not match.</summary>
+        /// <summary>
+        /// How many items of a kind were matched; zero when the kind did not match. Countable
+        /// items are counted in units rather than objects, because the game merges identical
+        /// ones into a single stack: a storage holding 299 Arbor Acorns is one or a few pile
+        /// objects whose <see cref="PrimaryElement.Units"/> is 299, and counting objects would
+        /// report 59 seeds for it.
+        /// </summary>
         internal static int CountFor(TargetKind kind) {
+            if (!counted.TryGetValue(kind, out var set))
+                return 0;
+            int total = 0;
+            foreach (var go in set) {
+                if (go != null)
+                    total += UnitsIn(go);
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// Number of matched objects of a kind, before stacks are expanded into units. Only
+        /// useful for diagnostics: it is what <see cref="CountFor"/> would have reported if it
+        /// counted entities instead of items.
+        /// </summary>
+        internal static int ObjectCountFor(TargetKind kind) {
             return counted.TryGetValue(kind, out var set) ? set.Count : 0;
+        }
+
+        /// <summary>
+        /// How many items one matched object represents. Mirrors the rule the game itself uses
+        /// in <c>Storage.Store</c> to choose between a count and a mass: a countable prefab
+        /// reports its <see cref="PrimaryElement.Units"/>, everything else is a single entity.
+        /// <para>
+        /// Rounds rather than truncates because absorbing a pile adds masses, so a 299 unit
+        /// stack can land on 298.9999 and truncation would silently lose a seed.
+        /// </para>
+        /// </summary>
+        private static int UnitsIn(GameObject go) {
+            var kPrefabID = go.GetComponent<KPrefabID>();
+            var pe = go.GetComponent<PrimaryElement>();
+            if (kPrefabID == null || pe == null ||
+                    !Assets.IsTagCountable(kPrefabID.PrefabTag))
+                return 1;
+            return Mathf.Max(1, Mathf.RoundToInt(pe.Units));
+        }
+
+        /// <summary>
+        /// Total mass and calories of the matched food. Reads the same deduplicated set as
+        /// <see cref="CountFor"/>, so the figures describe exactly the food the search found.
+        /// <para>
+        /// Cooking ingredients such as Sleet Wheat Grain carry no <see cref="Edible"/> because
+        /// their calorie value is zero, so their mass still has to be counted from the
+        /// <see cref="PrimaryElement"/> alone. <paramref name="allHaveCalories"/> is false when
+        /// any matched item has no calorie data, which tells the caller to show mass only.
+        /// </para>
+        /// </summary>
+        internal static void FoodTotals(out float mass, out float calories,
+                out bool allHaveCalories) {
+            mass = 0f;
+            calories = 0f;
+            allHaveCalories = counted.TryGetValue(TargetKind.Food, out var set) &&
+                set.Count > 0;
+            if (!allHaveCalories)
+                return;
+            foreach (var go in set) {
+                if (go == null)
+                    continue;
+                var pe = go.GetComponent<PrimaryElement>();
+                if (pe != null)
+                    mass += pe.Mass;
+                var edible = go.GetComponent<Edible>();
+                if (edible != null && edible.FoodInfo != null)
+                    calories += edible.Calories;
+                else
+                    allHaveCalories = false;
+            }
         }
 
         /// <summary>
@@ -425,8 +502,9 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
-        /// Free floating items, which covers debris, food, seeds, industrial products and any
-        /// equipment lying on the floor. Runs last so it only claims what nothing else did.
+        /// Free floating items, which covers debris, food, seeds, critter eggs, industrial
+        /// products and any equipment lying on the floor. Runs last so it only claims what
+        /// nothing else did.
         /// </summary>
         private static void CollectPickupables(SearchMatches matches,
                 List<KMonoBehaviour> targets, Dictionary<GameObject, Color> colors) {
@@ -443,9 +521,9 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
-        /// Plants and foods live on components that overlap arbitrarily (a crop is also
-        /// harvestable and uprootable, a harvestable can be edible), so every relevant list
-        /// is walked and the target set collapses the duplicates.
+        /// Plants, seeds and foods live on components that overlap arbitrarily (a crop is also
+        /// harvestable and uprootable, a harvestable can be edible), so every relevant list is
+        /// walked and the target set collapses the duplicates.
         /// </summary>
         private static void CollectPlantsAndFood(SearchMatches matches,
                 List<KMonoBehaviour> targets, Dictionary<GameObject, Color> colors) {
@@ -463,7 +541,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                 TryAddPrefab(TargetKind.Plant, mutants[i], matches, targets, colors);
             var seeds = Components.PlantableSeeds.Items;
             for (int i = 0; i < seeds.Count; i++)
-                TryAddPrefab(TargetKind.Plant, seeds[i], matches, targets, colors);
+                TryAddPrefab(TargetKind.Seed, seeds[i], matches, targets, colors);
             var edibles = Components.Edibles.Items;
             for (int i = 0; i < edibles.Count; i++)
                 TryAddPrefab(TargetKind.Food, edibles[i], matches, targets, colors);

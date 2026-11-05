@@ -39,10 +39,11 @@ namespace BobbyModding.MaterialSearchOverlay {
                         "Names can be partial and ignore case: 'hatch' finds Hatches, 'iron' finds Iron Ore.\n" +
                         "Searchable kinds:\n" +
                         "- Materials, e.g. Iron Ore, Bleach Stone\n" +
-                        "- Plants and food, e.g. Mealwood, Mirth Leaf, Raw Egg\n" +
+                        "- Plants, seeds and food, e.g. Mealwood, Arbor Acorn, Raw Egg\n" +
                         "- Equipment and boosters, e.g. Atmo Suit, Advanced Medical Booster\n" +
                         "- Industrial products, e.g. Microchip, Atomic Power Bank\n" +
                         "- Critters and duplicants, e.g. Hatches, Pufts, Duplicant\n" +
+                        "- Critter eggs, e.g. Hatch Egg\n" +
                         "- Artifacts, e.g. Nuclear Power Plant Model\n";
 
                     public static LocString BUTTON = "Material Search Overlay";
@@ -59,6 +60,17 @@ namespace BobbyModding.MaterialSearchOverlay {
                     /// One label per searchable kind, shown as a badge on dropdown rows so a
                     /// name that matches several kinds ("Fish" as food and as creature) can be
                     /// told apart. {0} is the count for that kind.
+                    /// <para>
+                    /// The count is an item count, not an object count: the game merges
+                    /// identical stackable items, so 299 stored Arbor Acorns are reported as
+                    /// 299 seeds rather than as the one or few pile objects they occupy.
+                    /// </para>
+                    /// <para>
+                    /// Food is the exception: it reports the combined mass and calories of the
+                    /// matches instead of a count, so {0} is the mass and {1} the calories.
+                    /// Zero-calorie cooking ingredients have no calorie data, so the calories
+                    /// part is omitted for them and only the mass is shown.
+                    /// </para>
                     /// </summary>
                     public static LocString COUNT_MATERIAL = "{0} materials";
                     public static LocString COUNT_EQUIPMENT = "{0} equipment";
@@ -66,8 +78,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                     public static LocString COUNT_BIONIC = "{0} bionic duplicants";
                     public static LocString COUNT_BOOSTER = "{0} boosters";
                     public static LocString COUNT_CRITTER = "{0} critters";
-                    public static LocString COUNT_FOOD = "{0} food";
+                    public static LocString COUNT_EGG = "{0} eggs";
+                    public static LocString COUNT_FOOD = "{0} ({1})";
                     public static LocString COUNT_PLANT = "{0} plants";
+                    public static LocString COUNT_SEED = "{0} seeds";
                     public static LocString COUNT_INDUSTRIAL = "{0} industrial products";
                     public static LocString COUNT_ARTIFACT = "{0} artifacts";
 
@@ -79,8 +93,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                         public static LocString BIONIC = "Bionic";
                         public static LocString BOOSTER = "Booster";
                         public static LocString CRITTER = "Critter";
+                        public static LocString EGG = "Egg";
                         public static LocString FOOD = "Food";
                         public static LocString PLANT = "Plant";
+                        public static LocString SEED = "Seed";
                         public static LocString INDUSTRIAL = "Industrial";
                         public static LocString ARTIFACT = "Artifact";
                     }

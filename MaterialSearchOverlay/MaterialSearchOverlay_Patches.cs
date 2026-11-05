@@ -131,8 +131,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             Log.Debug("AfterDbInit: loaded {0} elements, e.g. 'Sand'→'{1}'".F(names.Count,
                 names.TryGetValue(SimHashes.Sand, out var s) ? s : "MISSING"));
             // Everything else is indexed in one pass so the dropdown can match equipment,
-            // duplicants, boosters, critters, food, plants, industrial products and
-            // artifacts from the same text box as the elements.
+            // duplicants, boosters, critters, critter eggs, food, plants, industrial products
+            // and artifacts from the same text box as the elements.
             SearchIndex.Build();
         }
 
@@ -421,8 +421,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                 case TargetKind.Bionic: return MSearchTypes.BIONIC;
                 case TargetKind.Booster: return MSearchTypes.BOOSTER;
                 case TargetKind.Critter: return MSearchTypes.CRITTER;
+                case TargetKind.Egg: return MSearchTypes.EGG;
                 case TargetKind.Food: return MSearchTypes.FOOD;
                 case TargetKind.Plant: return MSearchTypes.PLANT;
+                case TargetKind.Seed: return MSearchTypes.SEED;
                 case TargetKind.Industrial: return MSearchTypes.INDUSTRIAL;
                 default: return MSearchTypes.ARTIFACT;
                 }
@@ -496,9 +498,11 @@ namespace BobbyModding.MaterialSearchOverlay {
                 AppendCount(parts, TargetKind.Bionic);
                 AppendCount(parts, TargetKind.Booster);
                 AppendCount(parts, TargetKind.Critter);
+                AppendCount(parts, TargetKind.Egg);
                 AppendCount(parts, TargetKind.Equipment);
-                AppendCount(parts, TargetKind.Food);
+                AppendFoodTotals(parts);
                 AppendCount(parts, TargetKind.Plant);
+                AppendCount(parts, TargetKind.Seed);
                 AppendCount(parts, TargetKind.Industrial);
                 AppendCount(parts, TargetKind.Artifact);
                 if (parts.Count == 0) {
@@ -511,8 +515,32 @@ namespace BobbyModding.MaterialSearchOverlay {
 
             private static void AppendCount(List<string> parts, TargetKind kind) {
                 int count = SearchHighlighter.CountFor(kind);
-                if (count > 0)
-                    parts.Add(string.Format(CountLabel(kind), count));
+                if (count <= 0)
+                    return;
+                // Countable items are merged into stacks, so the unit count routinely differs
+                // from the number of objects found. Worth a log line when someone reports a
+                // figure that does not match the storage UI.
+                int objects = SearchHighlighter.ObjectCountFor(kind);
+                if (objects != count)
+                    Log.Debug("Count summary: {0} = {1} units across {2} objects".F(kind, count,
+                        objects));
+                parts.Add(string.Format(CountLabel(kind), count));
+            }
+
+            /// <summary>
+            /// Food reports its combined mass and calories instead of a count, which says far
+            /// more about a larder than the number of individual units in it.
+            /// </summary>
+            private static void AppendFoodTotals(List<string> parts) {
+                if (SearchHighlighter.CountFor(TargetKind.Food) <= 0)
+                    return;
+                SearchHighlighter.FoodTotals(out float mass, out float calories,
+                    out bool allHaveCalories);
+                string massText = GameUtil.GetFormattedMass(mass);
+                parts.Add(allHaveCalories ?
+                    string.Format(MSearch.COUNT_FOOD, massText,
+                        GameUtil.GetFormattedCalories(calories)) :
+                    massText);
             }
 
             private static LocString CountLabel(TargetKind kind) {
@@ -523,8 +551,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                 case TargetKind.Bionic: return MSearch.COUNT_BIONIC;
                 case TargetKind.Booster: return MSearch.COUNT_BOOSTER;
                 case TargetKind.Critter: return MSearch.COUNT_CRITTER;
-                case TargetKind.Food: return MSearch.COUNT_FOOD;
+                case TargetKind.Egg: return MSearch.COUNT_EGG;
                 case TargetKind.Plant: return MSearch.COUNT_PLANT;
+                case TargetKind.Seed: return MSearch.COUNT_SEED;
                 case TargetKind.Industrial: return MSearch.COUNT_INDUSTRIAL;
                 default: return MSearch.COUNT_ARTIFACT;
                 }
@@ -567,7 +596,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                     if (pe == null || !elementIds.Contains(pe.ElementID))
                         continue;
                     int cell = Grid.PosToCell(pickupables[i]);
-                    if ((int)Grid.WorldIdx[cell] != worldId)
+                    // Loose items can sit outside the grid (a rocket interior, a stray spawn),
+                    // and PosToCell reports those as an invalid cell rather than a real one.
+                    if (!Grid.IsValidCell(cell) || (int)Grid.WorldIdx[cell] != worldId)
                         continue;
                     // Explored space only, same as the other two walks.
                     if (Grid.Visible[cell] <= 20)
@@ -586,7 +617,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                     if (pe == null || !elementIds.Contains(pe.ElementID))
                         continue;
                     int cell = Grid.PosToCell(buildings[i]);
-                    if ((int)Grid.WorldIdx[cell] != worldId)
+                    // Buildings can be off-grid too (rocket interiors, worldgen leftovers),
+                    // and PosToCell reports those as an invalid cell rather than a real one.
+                    if (!Grid.IsValidCell(cell) || (int)Grid.WorldIdx[cell] != worldId)
                         continue;
                     // Explored space only, matching what the highlighter can light up. All
                     // three walks are filtered the same way, so a mass figure and the set of
@@ -631,6 +664,141 @@ namespace BobbyModding.MaterialSearchOverlay {
             internal static void Postfix(IDictionary<HashedString, Func<SimDebugView, int, Color>> ___getColourFuncs) {
                 ___getColourFuncs[MaterialSearchOverlay.ID] = MaterialSearchOverlay.GetColor;
                 Log.Debug("OnPrefabInit: getColourFuncs[{0}] registered, count={1}".F(MaterialSearchOverlay.ID, ___getColourFuncs.Count));
+            }
+        }
+
+        /// <summary>
+        /// Drops every hovered object the search did not match. This is the game's own filter
+        /// point for overlay hover text: whatever survives it is what the tooltip draws a
+        /// shadow bar for, including the name, status items and temperature, so none of that
+        /// has to be reimplemented.
+        /// </summary>
+        [HarmonyPatch(typeof(SelectToolHoverTextCard), "ShouldShowSelectableInCurrentOverlay")]
+        public static class SelectToolHoverTextCard_ShouldShowSelectable_Patch {
+            internal static void Postfix(KSelectable selectable, ref bool __result) {
+                if (!__result || selectable == null)
+                    return;
+                // Vanilla lets selectables without a prefab through; keep that, so nothing
+                // that never took part in the search starts being hidden.
+                if (selectable.GetComponent<KPrefabID>() == null)
+                    return;
+                var overlay = MaterialSearchOverlay.Instance;
+                if (overlay == null || OverlayScreen.Instance == null ||
+                        OverlayScreen.Instance.GetMode() != MaterialSearchOverlay.ID)
+                    return;
+                __result = overlay.ShouldShowHoverEntry(selectable);
+            }
+        }
+
+        /// <summary>
+        /// Teaches the hover card that this overlay does not want the per cell element block
+        /// unless the cell's own element matched. Registered lazily rather than in the card's
+        /// OnSpawn, so it does not matter when the tool was created and a rebuilt tool picks
+        /// the filter up again.
+        /// </summary>
+        [HarmonyPatch(typeof(SelectToolHoverTextCard), "UpdateHoverElements")]
+        public static class SelectToolHoverTextCard_UpdateHoverElements_Patch {
+            internal static void Prefix(Dictionary<HashedString, Func<bool>> ___overlayFilterMap) {
+                if (___overlayFilterMap.ContainsKey(MaterialSearchOverlay.ID))
+                    return;
+                ___overlayFilterMap[MaterialSearchOverlay.ID] =
+                    MaterialSearchOverlay.ShouldShowHoverCell;
+                Log.Debug("Hover filter registered for {0}".F(MaterialSearchOverlay.ID));
+            }
+        }
+
+        /// <summary>
+        /// Makes clicking and hovering pick the searched thing. The tool builds the list of
+        /// candidates under the cursor from several sources, and only the collider pass of that
+        /// list consults a condition: the hover override and every visible status icon are added
+        /// before it, unfiltered. A seed showing a status icon was therefore still clickable
+        /// when the search had not matched it - the tooltip filtered it, the click did not, and
+        /// the seed won the sort on its instance id. Re-picking from the finished, already
+        /// sorted list applies the tooltip's rule to every source at once, and keeps the game's
+        /// own ordering, cycling and selection sounds: click once to get the match, click again
+        /// to walk through the other matches in the cell.
+        /// </summary>
+        /// <remarks>
+        /// The filtering happens here rather than on <c>StatusItemRenderer.GetIntersections</c>
+        /// because that method is two lines long and Mono inlines it into the tool, so patching
+        /// it changes nothing at runtime. A postfix on the closed generic is safe: the method is
+        /// far too large to inline, and the tool always closes it over <see cref="KSelectable"/>.
+        /// </remarks>
+        [HarmonyPatch]
+        public static class InterfaceTool_GetObjectUnderCursor_Patch {
+            private static MethodBase TargetMethod() {
+                var target = AccessTools.Method(typeof(InterfaceTool), "GetObjectUnderCursor");
+                var closed = target != null && target.IsGenericMethodDefinition ?
+                    target.MakeGenericMethod(typeof(KSelectable)) : target;
+                Log.Debug("Click filter target: {0}".F(closed));
+                return closed;
+            }
+
+            internal static void Postfix(InterfaceTool __instance, bool cycleSelection,
+                    Component previous_selection, ref KSelectable __result,
+                    List<InterfaceTool.Intersection> ___intersections) {
+                if (!(__instance is SelectTool))
+                    return;
+                var overlay = MaterialSearchOverlay.Instance;
+                if (overlay == null || !overlay.HoverFilterActive ||
+                        OverlayScreen.Instance == null ||
+                        OverlayScreen.Instance.GetMode() != MaterialSearchOverlay.ID)
+                    return;
+                __result = Pick(___intersections, cycleSelection, previous_selection, overlay);
+            }
+
+            /// <summary>
+            /// Returns the kept entry at the game's own cycling position, or null when the cell
+            /// holds nothing the search matched. The list arrives sorted by the game, so walking
+            /// it in order keeps the vanilla top of the stack first behaviour. Two passes and no
+            /// allocations, since the hover path runs this once per frame.
+            /// </summary>
+            private static KSelectable Pick(List<InterfaceTool.Intersection> intersections,
+                    bool cycleSelection, Component previous_selection,
+                    MaterialSearchOverlay overlay) {
+                if (intersections == null || intersections.Count == 0)
+                    return null;
+                int kept = 0;
+                int previous_index = -1;
+                for (int i = 0; i < intersections.Count; i++) {
+                    var selectable = intersections[i].component as KSelectable;
+                    if (!ShouldKeep(selectable, overlay))
+                        continue;
+                    if (selectable == previous_selection)
+                        previous_index = kept;
+                    kept++;
+                }
+                if (kept == 0)
+                    return null;
+                // Same rule the game uses: cycle only when the previous pick survived the
+                // filter, otherwise start at the top of the stack.
+                int wanted = cycleSelection && previous_index >= 0 ?
+                    (previous_index + 1) % kept : 0;
+                int index = 0;
+                for (int i = 0; i < intersections.Count; i++) {
+                    var selectable = intersections[i].component as KSelectable;
+                    if (!ShouldKeep(selectable, overlay))
+                        continue;
+                    if (index == wanted)
+                        return selectable;
+                    index++;
+                }
+                return null;
+            }
+
+            /// <summary>
+            /// The rule the tooltip already uses: the proxies are the game's way of selecting a
+            /// tile, so they follow the cell block (an element search can still be inspected, a
+            /// creature search cannot), and everything else follows what the overlay lights up.
+            /// </summary>
+            private static bool ShouldKeep(KSelectable selectable,
+                    MaterialSearchOverlay overlay) {
+                if (selectable == null)
+                    return false;
+                if (selectable.GetComponent<CellSelectionObject>() != null ||
+                        selectable.GetComponent<BackwallSelectionObject>() != null)
+                    return MaterialSearchOverlay.ShouldShowHoverCell();
+                return overlay.ShouldShowHoverEntry(selectable);
             }
         }
     }

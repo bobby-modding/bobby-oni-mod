@@ -32,7 +32,7 @@ Paths below are shortened: `...` means
 |---|---|---|
 | `...INPUT_BINDINGS.ROOT.MATERIALSEARCH` | Open Material Search Overlay | Keybind name in controls menu |
 | `...OVERLAYS.MATERIALSEARCH.NAME` | MATERIAL SEARCH OVERLAY | Overlay title shown in dropdown |
-| `...OVERLAYS.MATERIALSEARCH.DESCRIPTION` | Search by name to find anything in your colony and highlight it on the map.<br>Names can be partial and ignore case: 'hatch' finds Hatches, 'iron' finds Iron Ore.<br>Searchable kinds:<br>- Materials, e.g. Iron Ore, Bleach Stone<br>- Plants and food, e.g. Mealwood, Mirth Leaf, Raw Egg<br>- Equipment and boosters, e.g. Atmo Suit, Advanced Medical Booster<br>- Industrial products, e.g. Microchip, Atomic Power Bank<br>- Critters and duplicants, e.g. Hatches, Pufts, Duplicant<br>- Artifacts, e.g. Nuclear Power Plant Model | Legend description shown when the overlay is open |
+| `...OVERLAYS.MATERIALSEARCH.DESCRIPTION` | Search by name to find anything in your colony and highlight it on the map.<br>Names can be partial and ignore case: 'hatch' finds Hatches, 'iron' finds Iron Ore.<br>Searchable kinds:<br>- Materials, e.g. Iron Ore, Bleach Stone<br>- Plants and food, e.g. Mealwood, Mirth Leaf, Raw Egg<br>- Equipment and boosters, e.g. Atmo Suit, Advanced Medical Booster<br>- Industrial products, e.g. Microchip, Atomic Power Bank<br>- Critters and duplicants, e.g. Hatches, Pufts, Duplicant<br>- Critter eggs, e.g. Hatch Egg<br>- Artifacts, e.g. Nuclear Power Plant Model | Legend description shown when the overlay is open |
 | `...OVERLAYS.MATERIALSEARCH.BUTTON` | Material Search Overlay | Button label in overlay menu |
 | `...OVERLAYS.MATERIALSEARCH.TOOLTIP` | Search for materials, equipment, creatures and more by typing their name | Hover tooltip for the button |
 | `...OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER` | Type a name to search... | Placeholder text in search box |
@@ -45,8 +45,10 @@ Paths below are shortened: `...` means
 | `...OVERLAYS.MATERIALSEARCH.COUNT_BIONIC` | {0} bionic duplicants | Count summary |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_BOOSTER` | {0} boosters | Count summary |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_CRITTER` | {0} critters | Count summary |
-| `...OVERLAYS.MATERIALSEARCH.COUNT_FOOD` | {0} food | Count summary |
+| `...OVERLAYS.MATERIALSEARCH.COUNT_EGG` | {0} eggs | Count summary |
+| `...OVERLAYS.MATERIALSEARCH.COUNT_FOOD` | {0} ({1}) | Food total: mass ({0}) and calories ({1}); calories are omitted when unavailable |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_PLANT` | {0} plants | Count summary |
+| `...OVERLAYS.MATERIALSEARCH.COUNT_SEED` | {0} seeds | Count summary |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_INDUSTRIAL` | {0} industrial products | Count summary |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_ARTIFACT` | {0} artifacts | Count summary |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.MATERIAL` | Material | Type badge on a dropdown row |
@@ -55,8 +57,10 @@ Paths below are shortened: `...` means
 | `...OVERLAYS.MATERIALSEARCH.TYPES.BIONIC` | Bionic | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.BOOSTER` | Booster | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.CRITTER` | Critter | Type badge on a dropdown row |
+| `...OVERLAYS.MATERIALSEARCH.TYPES.EGG` | Egg | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.FOOD` | Food | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.PLANT` | Plant | Type badge on a dropdown row |
+| `...OVERLAYS.MATERIALSEARCH.TYPES.SEED` | Seed | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.INDUSTRIAL` | Industrial | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TYPES.ARTIFACT` | Artifact | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TOOLTIPS.MATCH` | Material matches the search term | Element tooltip when highlighted |

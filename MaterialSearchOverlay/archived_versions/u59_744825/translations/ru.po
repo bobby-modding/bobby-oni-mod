@@ -24,7 +24,7 @@ msgstr "ПОИСК МАТЕРИАЛОВ"
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.DESCRIPTION
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.DESCRIPTION"
-msgid "Search by name to find anything in your colony and highlight it on the map.\nNames can be partial and ignore case: 'hatch' finds Hatches, 'iron' finds Iron Ore.\nSearchable kinds:\n- Materials, e.g. Iron Ore, Bleach Stone\n- Plants and food, e.g. Mealwood, Mirth Leaf, Raw Egg\n- Equipment and boosters, e.g. Atmo Suit, Advanced Medical Booster\n- Industrial products, e.g. Microchip, Atomic Power Bank\n- Critters and duplicants, e.g. Hatches, Pufts, Duplicant\n- Artifacts, e.g. Nuclear Power Plant Model"
+msgid "Search by name to find anything in your colony and highlight it on the map.\nNames can be partial and ignore case: 'hatch' finds Hatches, 'iron' finds Iron Ore.\nSearchable kinds:\n- Materials, e.g. Iron Ore, Bleach Stone\n- Plants, seeds and food, e.g. Mealwood, Arbor Acorn, Raw Egg\n- Equipment and boosters, e.g. Atmo Suit, Advanced Medical Booster\n- Industrial products, e.g. Microchip, Atomic Power Bank\n- Critters and duplicants, e.g. Hatches, Pufts, Duplicant\n- Critter eggs, e.g. Hatch Egg\n- Artifacts, e.g. Nuclear Power Plant Model"
 msgstr ""
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.BUTTON
@@ -87,14 +87,24 @@ msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVER
 msgid "{0} critters"
 msgstr ""
 
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_EGG
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_EGG"
+msgid "{0} eggs"
+msgstr ""
+
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_FOOD
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_FOOD"
-msgid "{0} food"
+msgid "{0} ({1})"
 msgstr ""
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_PLANT
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_PLANT"
 msgid "{0} plants"
+msgstr ""
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_SEED
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_SEED"
+msgid "{0} seeds"
 msgstr ""
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.COUNT_INDUSTRIAL
@@ -137,6 +147,11 @@ msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVER
 msgid "Critter"
 msgstr ""
 
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.EGG
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.EGG"
+msgid "Egg"
+msgstr ""
+
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.FOOD
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.FOOD"
 msgid "Food"
@@ -145,6 +160,11 @@ msgstr ""
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.PLANT
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.PLANT"
 msgid "Plant"
+msgstr ""
+
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.SEED
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.SEED"
+msgid "Seed"
 msgstr ""
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TYPES.INDUSTRIAL

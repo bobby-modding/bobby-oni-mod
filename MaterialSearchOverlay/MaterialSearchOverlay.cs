@@ -79,6 +79,7 @@ namespace BobbyModding.MaterialSearchOverlay {
         public MaterialSearchOverlay() {
             cameraLayerMask = LayerMask.GetMask("MaskedOverlay", "MaskedOverlayBG");
             targetLayer = LayerMask.NameToLayer("MaskedOverlay");
+            targetLayerMask = LayerMask.GetMask("MaskedOverlay");
             SearchText = null;
             SelectedEntry = null;
             // One condition covering every kind: the colour of a highlighted entity is looked
@@ -127,6 +128,55 @@ namespace BobbyModding.MaterialSearchOverlay {
                 return NON_MATCHING_COLOR;
             return ElementColors.TryGetValue(id, out var color) ? color :
                 NON_MATCHING_COLOR;
+        }
+
+        /// <summary>
+        /// True while a search has resolved to something. The hover tooltip filter is a no-op
+        /// otherwise, so opening the overlay with an empty search leaves the vanilla tooltip
+        /// exactly as it was.
+        /// </summary>
+        internal bool HoverFilterActive => Matches != null && !Matches.IsEmpty;
+
+        /// <summary>
+        /// Whether a hovered object keeps its entry in the tooltip. Only the things the search
+        /// matched: <see cref="targetColors"/> is the same set the overlay lights up, so what
+        /// glows is exactly what the tooltip lists. A container lit up because of what it holds
+        /// is in that set too (the highlighter adds the building rather than the stored item),
+        /// so the bin still explains itself.
+        /// </summary>
+        internal bool ShouldShowHoverEntry(KSelectable selectable) {
+            if (!HoverFilterActive || selectable == null)
+                return true;
+            return targetColors.ContainsKey(selectable.gameObject);
+        }
+
+        /// <summary>
+        /// Whether the per cell element block belongs in the tooltip, asked by the game through
+        /// the hover card's overlay filter map. Only when the cell's own element matched, so
+        /// searching for a creature does not also explain the oxygen it is sitting in. A
+        /// matching natural backwall counts as well, because the cell block is where the game
+        /// labels it. Main thread only: it reads the live mouse cell.
+        /// </summary>
+        internal static bool ShouldShowHoverCell() {
+            var overlay = Instance;
+            if (overlay == null || !overlay.HoverFilterActive)
+                return true;
+            var camera = Camera.main;
+            if (camera == null)
+                return true;
+            int cell = Grid.PosToCell(camera.ScreenToWorldPoint(KInputManager.GetMousePos()));
+            if (!Grid.IsValidCell(cell))
+                return true;
+            var element = Grid.Element[cell];
+            if (element != null && overlay.Matches.Elements.Contains(element.id))
+                return true;
+            return HasMatchingBackwall(cell);
+        }
+
+        /// <summary>True when the natural backwall at this cell matched the current search.</summary>
+        private static bool HasMatchingBackwall(int cell) {
+            var match = backwallMatches;
+            return match != null && (uint)cell < (uint)match.Length && match[cell] != default;
         }
 
         /// <summary>
@@ -179,12 +229,26 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         private readonly int targetLayer;
 
+        /// <summary>
+        /// Layer bit for <see cref="targetLayer"/>. Highlighted entities are moved onto that
+        /// layer to be drawn over everything else, which also takes them out of the select
+        /// tool's collider pass: its default mask does not include it. The mask has to be
+        /// widened while the overlay is up or the things the search lit up cannot be clicked.
+        /// </summary>
+        private readonly int targetLayerMask;
+
         public override void Enable() {
             var camera = Camera.main;
             base.Enable();
             CameraController.Instance.ToggleColouredOverlayView(true);
             if (camera != null)
                 camera.cullingMask |= cameraLayerMask;
+            // Same approach as the conduit overlay: keep the tool's own layers so tiles and
+            // buildings still report, and add the highlight layer back in. Everything the
+            // search did not match is rejected by the click filter afterwards.
+            if (SelectTool.Instance != null)
+                SelectTool.Instance.SetLayerMask(SelectTool.Instance.GetDefaultLayerMask() |
+                    targetLayerMask);
             // Prefabs, boosters and foods all need a loaded world: at db init Game.Instance is
             // null, which makes the game's DLC filter reject every prefab. First open of the
             // overlay is the earliest point they can be read.
@@ -202,6 +266,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             CameraController.Instance.ToggleColouredOverlayView(false);
             if (camera != null)
                 camera.cullingMask &= ~cameraLayerMask;
+            if (SelectTool.Instance != null)
+                SelectTool.Instance.ClearLayerMask();
             if (Patches.SearchField != null)
                 Patches.SearchField.SetActive(false);
             if (Patches.DropdownContainer != null) {

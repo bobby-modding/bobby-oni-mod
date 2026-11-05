@@ -1,0 +1,51 @@
+name: Publish ONI Mod Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    # Required permissions to create a release and upload assets
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+
+      - name: Restore .NET Tools
+        run: dotnet tool restore
+
+      - name: Build Solution (Release)
+        run: dotnet build bobby-oni-mod.sln -c Release
+
+      - name: Package Mod
+        run: |
+          mkdir -p release_output
+          
+          # Zip your built mod folder. 
+          # Update 'MaterialSearchOverlay' if you add more mods or want to zip individual mod folders.
+          if [ -d "MaterialSearchOverlay" ]; then
+            cd MaterialSearchOverlay
+            # If your build outputs to bin/Release or a specific folder, adjust below.
+            # Here we zip the mod source/output files needed for distribution.
+            zip -r ../release_output/MaterialSearchOverlay.zip . -x "*.git*" "bin/*" "obj/*" ".vs/*"
+            cd ..
+          fi
+
+      - name: Create GitHub Release & Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_output/*.zip
+          generate_release_notes: true

@@ -4,12 +4,14 @@ An Oxygen Not Included mod that lets you search the colony by name and highlight
 
 ## Features
 
-- **Search by name** — one search box covers materials, equipment, duplicants, bionic duplicants, boosters, critters, food, plants, industrial products, and artifacts
+- **Search by name** — one search box covers materials, equipment, duplicants, bionic duplicants, boosters, critters, critter eggs, food, plants, seeds, industrial products, and artifacts
 - **Own overlay icon** — the overlay bar button and the overlay legend use a custom magnifier icon instead of the vanilla materials overlay icon
 - **Type badges** — every dropdown result is labelled with what kind of thing it is, so a name that exists in several categories can still be picked unambiguously
 - **Visual highlight** — matching entities light up in place; for elements, matching tiles, natural backwalls, buildings, and debris are colored in the element's natural color and non-matching cells are dimmed
 - **Mass totals** — selecting an element reports its total mass broken down by natural tiles, visible natural backwalls, debris, and buildings
-- **Count summary** — for everything else the label reports how many of each kind were found in the colony
+- **Count summary** — for everything else the label reports how many of each kind were found in the colony, counting stacked items by their units (299 stored Arbor Acorns read as `299 seeds`, not as the one or few piles they occupy); food instead reports its combined mass and calories (e.g. `20 kg (80,000 kcal)`), or mass only when calorie data is unavailable
+- **Filtered hover tooltip** — while the overlay is active, hovering a cell lists only what the search matched; the cell's own element block appears only when that element matched too, so searching `hatch egg` does not also explain the oxygen the egg is sitting in
+- **Search-aware clicking** — clicking a cell picks the matching thing straight away instead of cycling through everything else in it, and clicking again walks through the other matches; a cell with no match selects nothing until the search is cleared
 - **Tracked highlights** — matched entities are found once when you search, then stay lit up as they walk around; anything created afterwards is picked up by running the search again
 - **Debug logging** — optional verbose logging to `Player.log` (toggle in mod options)
 
@@ -23,8 +25,10 @@ An Oxygen Not Included mod that lets you search the colony by name and highlight
 | Bionic | Model label | `Bionic Duplicant` — matches every bionic duplicant |
 | Booster | Upgrade name | e.g. `Nutrient Loader`. Highlights bionic duplicants wearing it, plus loose boosters in storage |
 | Critter | Species name | e.g. `Pacu`, `Puft` |
+| Egg | Prefab name, tagged `GameTags.Egg` | e.g. `Hatch Egg`, `Pacu Egg`; matches loose eggs and eggs held in incubators or storage |
 | Food | Food name | e.g. `Raw Fish` |
-| Plant | Prefab name | e.g. `Mealwood`; matches fully grown plants, crops, seeds, and mutant plants |
+| Plant | Prefab name | e.g. `Mealwood`; matches fully grown plants, crops, and mutant plants |
+| Seed | Prefab name (`PlantableSeed` prefabs) | e.g. `Arbor Acorn`, `Thimble Reed Seed`; matches loose seeds and seeds held in storage. Edible seeds such as `Sleet Wheat Grain` stay under Food |
 | Industrial | Prefab name | e.g. `Steel`, `Coal`, medicine and medical supplies. Uses the same tag list as the sandbox "Industrial Products" filter — machines are *not* included |
 | Artifact | Prefab name | e.g. `Prehistoric Sphere` |
 
@@ -51,6 +55,8 @@ Subscribe on the Steam Workshop.
 2. Type any part of a name into the search field
 3. Matching results appear in the dropdown, each labelled with its kind — click one to pin it
 4. The map highlights all matches; unmatched cells appear gray when an element matched
+5. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
+6. Click a cell to select the match directly; click again to step through the other matches in that cell
 
 ## Building from source
 

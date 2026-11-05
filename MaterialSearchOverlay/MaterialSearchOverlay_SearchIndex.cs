@@ -15,8 +15,10 @@ namespace BobbyModding.MaterialSearchOverlay {
         Bionic,
         Booster,
         Critter,
+        Egg,
         Food,
         Plant,
+        Seed,
         Industrial,
         Artifact
     }
@@ -100,8 +102,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                 { TargetKind.Bionic, new Color(0.76f, 0.56f, 0.93f) },
                 { TargetKind.Booster, new Color(0.95f, 0.60f, 0.32f) },
                 { TargetKind.Critter, new Color(0.56f, 0.87f, 0.60f) },
+                { TargetKind.Egg, new Color(0.93f, 0.88f, 0.72f) },
                 { TargetKind.Food, new Color(0.96f, 0.84f, 0.44f) },
                 { TargetKind.Plant, new Color(0.44f, 0.76f, 0.47f) },
+                { TargetKind.Seed, new Color(0.72f, 0.80f, 0.40f) },
                 { TargetKind.Industrial, new Color(0.64f, 0.68f, 0.74f) },
                 { TargetKind.Artifact, new Color(0.90f, 0.55f, 0.85f) }
             };
@@ -138,7 +142,9 @@ namespace BobbyModding.MaterialSearchOverlay {
             TargetKind.Artifact,
             TargetKind.Industrial,
             TargetKind.Plant,
+            TargetKind.Seed,
             TargetKind.Booster,
+            TargetKind.Egg,
             TargetKind.Food
         };
 
@@ -206,10 +212,10 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// <c>Game.Instance</c> is still null, so
         /// <see cref="Game.IsCorrectDlcActiveForCurrentSave"/> takes its "game is not running"
         /// branch and rejects every prefab outright, which silently empties equipment, plants,
-        /// industrial products and artifacts. Booster prefabs are missing for the related
-        /// reason that the per-save DLC set is not resolved until the world loads, so the
-        /// game never creates them. <see cref="EdiblesManager.GetAllFoodTypes"/> additionally
-        /// asserts it is only called once a save is in play.
+        /// industrial products, artifacts and critter eggs. Booster prefabs are missing for
+        /// the related reason that the per-save DLC set is not resolved until the world loads,
+        /// so the game never creates them. <see cref="EdiblesManager.GetAllFoodTypes"/>
+        /// additionally asserts it is only called once a save is in play.
         /// </para>
         /// <para>
         /// The overlay cannot be opened without a save, so first open is the earliest point
@@ -301,14 +307,14 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
-        /// One pass over the prefab registry covers equipment, plants, industrial products
-        /// and artifacts. Each of those needs its own registry scan otherwise, and the
-        /// registry holds several thousand entries.
+        /// One pass over the prefab registry covers equipment, plants, seeds, industrial
+        /// products, artifacts and critter eggs. Each of those needs its own registry scan
+        /// otherwise, and the registry holds several thousand entries.
         /// </summary>
         private static void BuildPrefabs() {
             var prefabs = Assets.Prefabs;
             int scanned = 0, deprecated = 0, dlcBlocked = 0, badTag = 0, noName = 0;
-            int equippable = 0;
+            int equippable = 0, eggs = 0, seeds = 0;
             for (int i = 0; i < prefabs.Count; i++) {
                 var kPrefabID = prefabs[i];
                 var go = kPrefabID?.gameObject;
@@ -339,12 +345,27 @@ namespace BobbyModding.MaterialSearchOverlay {
                     equippable++;
                     AddPrefab(TargetKind.Equipment, name, prefabTag);
                 }
+                bool hide = kPrefabID.HasTag(GameTags.HideFromCodex);
                 if ((go.GetComponent<Harvestable>() != null ||
-                        go.GetComponent<WiltCondition>() != null) &&
-                        !kPrefabID.HasTag(GameTags.HideFromCodex))
+                        go.GetComponent<WiltCondition>() != null) && !hide)
                     AddPrefab(TargetKind.Plant, name, prefabTag);
+                // Seeds are loose prefabs of their own with no Harvestable or WiltCondition,
+                // so the plant test above never sees them. Food seeds are already indexed by
+                // BuildFoods and found through CollectPickupables, so indexing them here as
+                // well would duplicate the dropdown row and split one entity between kinds.
+                if (go.GetComponent<PlantableSeed>() != null &&
+                        EdiblesManager.GetFoodInfo(prefabTag.Name) == null && !hide) {
+                    seeds++;
+                    AddPrefab(TargetKind.Seed, name, prefabTag);
+                }
                 if (kPrefabID.HasTag(GameTags.Artifact) || kPrefabID.HasTag(GameTags.Keepsake))
                     AddPrefab(TargetKind.Artifact, name, prefabTag);
+                // GameTags.Egg marks actual critter eggs only; EggShell and Raw Egg carry
+                // their own tags and stay under Industrial and Food respectively.
+                if (kPrefabID.HasTag(GameTags.Egg)) {
+                    eggs++;
+                    AddPrefab(TargetKind.Egg, name, prefabTag);
+                }
                 for (int t = 0; t < INDUSTRIAL_TAGS.Length; t++) {
                     if (!kPrefabID.HasTag(INDUSTRIAL_TAGS[t]))
                         continue;
@@ -357,8 +378,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             // Parenthesised deliberately: .F() binds tighter than +, so without the parens it
             // would only format the second literal and silently drop the first placeholders.
             Log.Debug(("BuildPrefabs: scanned={0}, deprecated={1}, dlcBlocked={2}, " +
-                "badTag={3}, noName={4}, equippable={5}").F(scanned, deprecated, dlcBlocked,
-                    badTag, noName, equippable));
+                "badTag={3}, noName={4}, equippable={5}, eggs={6}, seeds={7}").F(scanned,
+                    deprecated, dlcBlocked, badTag, noName, equippable, eggs, seeds));
         }
 
         private static void AddPrefab(TargetKind kind, string displayName, Tag prefabTag) {
