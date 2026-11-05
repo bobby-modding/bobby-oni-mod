@@ -1,0 +1,102 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    
+    <RootNamespace>NoLimitTimerSensor</RootNamespace>
+    <AssemblyName>NoLimitTimerSensor</AssemblyName>
+    
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PLib" Version="4.25.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="ILRepack.Lib.MSBuild.Task" Version="2.0.40">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameLibsFolder)/0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GameLibsFolder)/Newtonsoft.Json.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameLibsFolder)/Assembly-CSharp.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(GameLibsFolder)/Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameLibsFolder)/UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameLibsFolder)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(GameLibsFolder)/UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(GameLibsFolder)/Unity.TextMeshPro.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameLibsFolder)/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="mod.yaml" CopyToOutputDirectory="Always" />
+    <None Update="mod_info.yaml" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+  <!--
+    Archive + deploy live in the shared root targets file so every mod project (and new mods
+    generated from this template) behaves the same: the build is archived per game build, then
+    that archive is what gets deployed to the local Dev mods folder.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('OniModDeploy.targets', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--  Automatically generates the SteamCMD .vdf file for Docker steamcmd, currently not supported -->
+  <!-- <Target Name="GenerateSteamVDF" AfterTargets="Build">
+    <PropertyGroup>
+      <WorkshopId></WorkshopId>
+
+      <VdfFilePath>$(ProjectDir)$(ProjectName).vdf</VdfFilePath>
+
+      <DockerContentFolder>/home/steam/steamcmd/modding/$(ProjectName)/$([System.String]::Copy('$(OutputPath)').Replace('\','/'))</DockerContentFolder>
+      <DockerPreviewFile>/home/steam/steamcmd/modding/$(ProjectName)/$(ProjectName)_Preview.png</DockerPreviewFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <VdfLine Include='"workshopitem"' />
+      <VdfLine Include='{' />
+      <VdfLine Include=' "appid" "457140"' /> 
+      <VdfLine Include=' "publishedfileid" "$(WorkshopId)"' />
+      <VdfLine Include=' "contentfolder" "$(DockerContentFolder)"' />
+      <VdfLine Include=' "previewfile" "$(DockerPreviewFile)"' />
+      <VdfLine Include=' "visibility" "0"' />
+      <VdfLine Include=' "title" "$(ProjectName)"' />
+      <VdfLine Include=' "description" "A $(ProjectName) mod for Oxygen Not Included."' />
+      <VdfLine Include=' "changenote" "Initial Release"' />
+      <VdfLine Include='}' />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(VdfFilePath)" Lines="@(VdfLine)" Overwrite="true" />
+    
+    <Message Importance="High" Text="Generated Docker-ready VDF file for $(ProjectName)" />
+  </Target> -->
+
+</Project>

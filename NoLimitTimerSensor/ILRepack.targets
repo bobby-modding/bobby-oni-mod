@@ -1,0 +1,27 @@
+<Project>
+  <!-- Must run before ArchiveBuild: archiving (and the dev copy that reads the archive) has to
+       see the merged assembly, not the one still missing PLib. -->
+  <Target Name="CustomILRepack" BeforeTargets="ArchiveBuild">
+    <ItemGroup>
+      <InputAssemblies Include="$(OutputPath)$(TargetName)$(TargetExt)"/>
+      <InputAssemblies Include="$(OutputPath)PLib.dll"/>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <LibraryPath>$(GameLibsFolder);$(OutputPath)</LibraryPath>
+    </PropertyGroup>
+
+    <ILRepack
+        Parallel="true"
+        DebugInfo="true"
+        AllowDuplicateResources="false"
+        InputAssemblies="@(InputAssemblies)"
+        LibraryPath="$(LibraryPath)"
+        TargetKind="SameAsPrimaryAssembly"
+        KeyFile="$(KeyFile)"
+        OutputFile="$(OutputPath)$(TargetName)$(TargetExt)"
+    />
+
+    <Delete Files="$(OutputPath)PLib.dll" />
+  </Target>
+</Project>
