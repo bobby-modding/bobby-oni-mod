@@ -68,6 +68,16 @@ namespace BobbyModding.MaterialSearchOverlay {
         private readonly List<KMonoBehaviour> layerTargets = new List<KMonoBehaviour>();
 
         /// <summary>
+        /// Scratch set handed to the game's per-frame highlight pass. Since U60 that helper
+        /// owns the set it walks and deletes everything offscreen from it, so the resolved
+        /// match set can never be passed directly: matches have to survive panning away and
+        /// back. The set is refilled from <see cref="layerTargets"/> every frame for the same
+        /// reason.
+        /// </summary>
+        private readonly HybridListHashSet<KMonoBehaviour> frameTargets =
+            new HybridListHashSet<KMonoBehaviour>();
+
+        /// <summary>
         /// Reused scratch space for the dead-colour sweep so that per frame upkeep does not
         /// allocate. The sweep runs over a dictionary bounded by the current search, so the
         /// walk is short and there is nothing to gain from tracking removals incrementally.
@@ -354,7 +364,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                 return;
             RemoveDestroyedTargets(layerTargets, targetColors);
             Grid.GetVisibleExtents(out var min, out var max);
-            UpdateHighlightTypeOverlay(min, max, layerTargets, null,
+            frameTargets.Clear();
+            frameTargets.Add(layerTargets);
+            RemoveOffscreenAndUpdateHighlights(min, max, frameTargets,
                 highlightConditions,
                 OverlayModes.BringToFrontLayerSetting.Constant, targetLayer);
         }
