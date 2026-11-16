@@ -41,6 +41,11 @@ msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVER
 msgid "Type a name to search..."
 msgstr ""
 
+#. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SELECTION_HINT
+msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SELECTION_HINT"
+msgid "Up/Down arrows to choose, Enter to select"
+msgstr ""
+
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.MASS_LABEL"
 msgid "Natural Tile: {0} |  Debris: {1} |  Buildings: {2} |  Backwall: {3}"

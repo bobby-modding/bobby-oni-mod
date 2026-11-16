@@ -72,6 +72,9 @@
 - [ ] **SB-7 Result cap:** type a single letter, e.g. `e`. Expected: at most 50 rows, the game stays responsive, and no exception appears in the log. If the list runs off the legend and rows cannot be reached, note it as a layout issue.
 - [ ] **SB-8 Multi-kind badges:** type `steel`. Expected: at least **two** rows named `Steel` — one **Material** badge, one **Industrial** badge — with different swatch colours.
 - [ ] **SB-9 Typing vs selecting:** with `hatch` typed, everything matching (critters, eggs, etc.) is highlighted and **no label** is shown. Click one row: only that kind stays highlighted and the label appears.
+- [ ] **SB-10 Keyboard selection:** type `copper ore`. Expected: a dim caption **"Up/Down arrows to choose, Enter to select"** sits above the rows and no row is highlighted yet. Press `Down` — the first row brightens. `Down` again moves one row lower, `Up` moves back, `Up` from the first row wraps to the last row. Press `Enter`: the dropdown closes, the box shows that row's name, the map shows that material, and the mass label appears — identical to clicking the row.
+- [ ] **SB-11 Keyboard edge cases:** with `copper ore` typed and nothing highlighted, `Enter` selects nothing (the box simply loses focus). Highlight a row, then type another character: the dropdown rebuilds with no highlight and the new character is appended to the **end** of the query, not the front. Arrow keys pressed while the box is not focused do nothing, and pressing them with no results (`zzzz`) does nothing either.
+- [ ] **SB-12 Holding an arrow:** with `e` typed (50 rows), press and **hold** `Down`. Expected: the highlight steps one row immediately, pauses briefly, then keeps stepping down without further presses until the key is released; `Up` does the same upwards. A quick tap still moves exactly one row. After releasing, type a character: it appears at the **end** of the query.
 
 ---
 
@@ -200,7 +203,7 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - [ ] **EL-1 Mass breakdown:** all four parts of the material label are visible and separated by `|`; numbers use the game's mass units (kg/t) and never show blank, `NaN`, or a negative value.
 - [ ] **EL-2 Backwall counting:** with a visible sandstone backwall, the **Backwall** figure is greater than 0. Cover part of it with a solid tile: the covered cells are not tinted and the figure drops after re-selecting the row.
 - [ ] **EL-3 Fog of war:** while part of the map is still unexplored, search `Copper Ore` and note the mass. Hidden cells are not tinted and are not counted. Paint over a large unexplored area with the Sandbox **FOW** tool (it only reveals, it cannot re-hide), then re-select the row: the figure increases (or stays the same if nothing new was revealed).
-- [ ] **EL-4 Dimming only for elements:** searching `Copper Ore` dims the map grey; searching `Hatch` leaves the map undimmed.
+- [ ] **EL-4 Dimming always on:** open the overlay with an empty search box — the whole map is already dimmed grey (sprites such as buildings and duplicants still show). Searching `Copper Ore` keeps the grey backdrop with the ore tinted; searching `Hatch` leaves the grey backdrop with only the hatches lit up.
 - [ ] **EL-5 Natural colours:** `Copper Ore` is copper/orange, `Water` is blue, non-matching cells are grey.
 
 ---
@@ -290,6 +293,8 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - The general `Artifact` row exists even in games without artifacts; it simply highlights nothing.
 - Some DLC-gated rows (e.g. `Bionic Duplicant`) can appear in a save where that content is unavailable; they highlight nothing.
 - The overlay has no custom legend rows beyond its description.
+- The dropdown highlight starts on no row after every keystroke; the first `Up`/`Down` steps onto the first row, and both ends wrap. Hovering a row moves the same highlight, and it stays on that row after the pointer leaves.
+- With more rows than fit in the legend panel (`e` returns 50), the keyboard highlight can step below the visible area; the list does not auto-scroll to follow it yet.
 - Artifacts cannot be spawned with the sandbox Spawn tool.
 - Debug logging is off by default and is very verbose when on.
 

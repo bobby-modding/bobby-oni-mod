@@ -47,8 +47,24 @@ namespace BobbyModding.MaterialSearchOverlay {
                         "- Artifacts, e.g. Nuclear Power Plant Model\n";
 
                     public static LocString BUTTON = "Material Search Overlay";
-                    public static LocString TOOLTIP = "Search for materials, equipment, creatures and more by typing their name";
+
+                    /// <summary>
+                    /// Hover text on the overlay menu button. {Hotkey} is filled in by the
+                    /// game's own <c>OverlayToggleInfo</c> constructor, and again by
+                    /// <c>OverlayMenu.RefreshButtons</c> whenever bindings or the controller
+                    /// change, so the key shown always matches the controls menu.
+                    /// </summary>
+                    public static LocString TOOLTIP = "Search for materials, equipment, creatures and more by typing their name {Hotkey}";
                     public static LocString SEARCH_PLACEHOLDER = "Type a name to search...";
+
+                    /// <summary>
+                    /// Caption above the dropdown rows. The arrow keys are spelled out rather
+                    /// than drawn as arrow glyphs, since the game font is not guaranteed to
+                    /// carry them, and the line has to stay on one line at the legend's width.
+                    /// No mouse mention either: the rows already read as clickable, and the
+                    /// point of the line is the shortcut nobody can guess at.
+                    /// </summary>
+                    public static LocString SELECTION_HINT = "Up/Down arrows to choose, Enter to select";
 
                     public static LocString MASS_LABEL = "Natural Tile: {0} |  Debris: {1} |  Buildings: {2} |  Backwall: {3}";
 

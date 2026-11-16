@@ -87,8 +87,39 @@ namespace BobbyModding.MaterialSearchOverlay {
     /// modded prefabs.
     /// </summary>
     internal static class SearchIndex {
-        /// <summary>Upper bound on dropdown rows, so a one letter query stays responsive.</summary>
-        internal const int MAX_RESULTS = 50;
+        /// <summary>
+        /// Default upper bound on results, so a one letter query stays responsive. It is
+        /// the factory setting of the Maximum Search Results option.
+        /// </summary>
+        internal const int DEFAULT_MAX_RESULTS = 50;
+
+        /// <summary>
+        /// Smallest limit the option can ask for. Anything below it would blind the search
+        /// to all but a few entries, and 0 would stop it returning anything at all.
+        /// </summary>
+        internal const int MIN_MAX_RESULTS = 1;
+
+        /// <summary>
+        /// Largest limit the option can ask for. The options page already restricts the
+        /// value, but a hand edited config file can hold anything, so the setter clamps.
+        /// </summary>
+        internal const int MAX_MAX_RESULTS = 1000;
+
+        private static int maxResults = DEFAULT_MAX_RESULTS;
+
+        /// <summary>
+        /// Upper bound on the results of a search. This caps both the dropdown rows and the
+        /// map highlight, because both read the same list from <see cref="Match"/>: what the
+        /// list shows is exactly what lights up.
+        /// </summary>
+        internal static int MaxResults {
+            get {
+                return maxResults;
+            }
+            set {
+                maxResults = Mathf.Clamp(value, MIN_MAX_RESULTS, MAX_MAX_RESULTS);
+            }
+        }
 
         internal static List<SearchEntry> Entries { get; private set; } = new List<SearchEntry>();
 
@@ -521,8 +552,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                 int byName = string.CompareOrdinal(a.DisplayName, b.DisplayName);
                 return byName != 0 ? byName : a.Kind.CompareTo(b.Kind);
             });
-            if (results.Count > MAX_RESULTS)
-                results = results.GetRange(0, MAX_RESULTS);
+            if (results.Count > MaxResults)
+                results = results.GetRange(0, MaxResults);
             return results;
         }
 

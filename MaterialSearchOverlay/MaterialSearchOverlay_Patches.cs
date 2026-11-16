@@ -37,7 +37,37 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         internal static GameObject MassLabel { get; private set; }
 
-        private static bool ShowTypeBadges = true;
+        /// <summary>
+        /// Whether each dropdown row carries a badge naming its kind. Read from the options
+        /// both at load and whenever the options page applies a change.
+        /// </summary>
+        internal static bool ShowTypeBadges { get; private set; } = true;
+
+        /// <summary>
+        /// Whether the overlay puts the keyboard in the search box as soon as it opens.
+        /// </summary>
+        internal static bool AutoFocusSearch { get; private set; } = true;
+
+        /// <summary>
+        /// Pushes a settings object into the statics the rest of the mod reads. Called once
+        /// at load and again from <see cref="MaterialSearchOverlayOptions.OnOptionsChanged"/>
+        /// so an option change needs no restart.
+        /// </summary>
+        internal static void ApplyOptions(MaterialSearchOverlayOptions options) {
+            if (options == null)
+                return;
+            Log.DebugEnabled = options.EnableDebugLogging;
+            ShowTypeBadges = options.ShowTypeBadges;
+            SearchIndex.MaxResults = options.MaxSearchResults;
+            AutoFocusSearch = options.AutoFocusSearch;
+            Log.Debug("ApplyOptions: debug={0} badges={1} maxResults={2} autoFocus={3}".F(
+                Log.DebugEnabled, ShowTypeBadges, SearchIndex.MaxResults, AutoFocusSearch));
+        }
+
+        /// <summary>Empties the search box, if the legend has built one yet.</summary>
+        internal static void ClearSearchField() {
+            OverlayLegend_OnSpawn_Patch.ClearSearchField();
+        }
 
         private static readonly Type OVERLAY_TYPE = typeof(OverlayMenu).GetNestedType(
             "OverlayToggleInfo", INSTANCE_ALL);
@@ -195,10 +225,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                 OVERLAY_ACTION, MaterialSearchOverlayStrings.INPUT_BINDINGS.ROOT.MATERIALSEARCH);
             new PLocalization().Register();
             new PVersionCheck().Register(this, new SteamVersionChecker());
-            var opts = POptions.ReadSettings<MaterialSearchOverlayOptions>() ??
-                new MaterialSearchOverlayOptions();
-            Log.DebugEnabled = opts.EnableDebugLogging;
-            ShowTypeBadges = opts.ShowTypeBadges;
+            ApplyOptions(POptions.ReadSettings<MaterialSearchOverlayOptions>() ??
+                new MaterialSearchOverlayOptions());
             new POptions().RegisterOptions(this, typeof(MaterialSearchOverlayOptions));
             if (PPatchTools.TryGetFieldValue<IDictionary<HashedString, StatusItemOverlays>>(
                     typeof(StatusItem), "overlayBitfieldMap", out var overlayBits)) {
@@ -210,9 +238,60 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         [HarmonyPatch(typeof(OverlayLegend), "OnSpawn")]
         public static class OverlayLegend_OnSpawn_Patch {
+            /// <summary>Background tint of a row nothing points at.</summary>
+            private static readonly Color NORMAL_ROW_COLOR = new Color(0f, 0f, 0f, 0.01f);
+
+            /// <summary>
+            /// Background tint of the row the last pointer enter or arrow key landed on. It is
+            /// also the row Enter would commit, so it is deliberately sticky: leaving the row
+            /// with the mouse does not clear it.
+            /// </summary>
+            private static readonly Color HIGHLIGHTED_ROW_COLOR = new Color(1f, 1f, 1f,
+                0.15f);
+
+            /// <summary>
+            /// One built dropdown row: the entry it stands for, and the background image whose
+            /// colour shows whether it is the highlighted one. Rows are destroyed and rebuilt
+            /// on every keystroke, so this holds no state beyond the current dropdown.
+            /// </summary>
+            private sealed class DropdownRow {
+                internal SearchEntry Entry;
+
+                internal Image Background;
+            }
+
+            /// <summary>The rows of the dropdown currently on screen, in display order.</summary>
+            private static readonly List<DropdownRow> rows = new List<DropdownRow>();
+
+            /// <summary>
+            /// Index into <see cref="rows"/> of the row Enter would commit, or -1 while
+            /// nothing has been stepped onto. Typing resets it, so Enter does nothing until an
+            /// arrow key (or the mouse) picks a row.
+            /// </summary>
+            private static int highlightedRow = -1;
+
+            /// <summary>
+            /// How long an arrow has to stay held before the highlight starts stepping by
+            /// itself, so a single tap moves exactly one row.
+            /// </summary>
+            private const float REPEAT_DELAY = 0.4f;
+
+            /// <summary>Gap between the automatic steps once the delay has passed.</summary>
+            private const float REPEAT_INTERVAL = 0.05f;
+
+            /// <summary>1 while Down repeats, -1 while Up repeats, 0 while neither does.</summary>
+            private static int heldDirection;
+
+            /// <summary>Unscaled time at which the next automatic step is due.</summary>
+            private static float nextRepeatTime;
+
             private static Transform DropdownItemsParent;
 
-            private static TMP_InputField SearchInput;
+            /// <summary>
+            /// The realized search box, or null before the legend has been built. Exposed to
+            /// the overlay itself so closing can clear the query.
+            /// </summary>
+            internal static TMP_InputField SearchInput { get; private set; }
 
             private static bool suppressDropdown;
 
@@ -234,6 +313,10 @@ namespace BobbyModding.MaterialSearchOverlay {
 
             internal static void Postfix(OverlayLegend __instance) {
                 Log.Debug("Postfix: OverlayLegend instance={0}".F(__instance.name));
+                // A respawned legend (new world) gets a fresh field and dropdown; any row
+                // tracked from the previous one points at a destroyed object.
+                rows.Clear();
+                highlightedRow = -1;
                 var field = new PTextField("MaterialSearchInput") {
                     PlaceholderText = MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER,
                     FlexSize = Vector2.right,
@@ -264,6 +347,20 @@ namespace BobbyModding.MaterialSearchOverlay {
                             Log.Debug("onSelect: input.text='{0}'".F(input.text));
                             if (!string.IsNullOrEmpty(input.text))
                                 PopulateDropdown(input.text);
+                        });
+                        // Enter commits the highlighted row exactly like a click does. TMP
+                        // finishes the edit and deactivates the field right after this
+                        // listener returns, so the dropdown is closed here rather than from
+                        // any key handling of our own; nothing highlighted - the state after
+                        // every keystroke - leaves the press unhandled.
+                        input.onSubmit.AddListener(_ => {
+                            if (highlightedRow < 0 || highlightedRow >= rows.Count)
+                                return;
+                            var entry = rows[highlightedRow].Entry;
+                            Log.Debug("onSubmit: committing row {0} '{1}'".F(highlightedRow,
+                                entry?.DisplayName ?? "null"));
+                            if (entry != null)
+                                OnResultSelected(entry);
                         });
 
                     } else
@@ -304,6 +401,36 @@ namespace BobbyModding.MaterialSearchOverlay {
                 Log.Debug("Postfix: DropdownContainer built, active={0}".F(sgo.activeInHierarchy));
             }
 
+            /// <summary>
+            /// Puts the keyboard in the search box, so opening the overlay is enough to start
+            /// typing. Must run after the legend is shown: TMP refuses to activate a field
+            /// whose GameObject is inactive, and the legend is still hidden while the overlay's
+            /// own <c>Enable</c> runs.
+            /// </summary>
+            internal static void FocusSearchField() {
+                var input = SearchInput;
+                if (input == null || !input.gameObject.activeInHierarchy) {
+                    Log.Debug("FocusSearchField: skipped, box not active");
+                    return;
+                }
+                Log.Debug("FocusSearchField: focusing '{0}'".F(input.name));
+                // Select first so the EventSystem routes typing here, then let TMP take the
+                // edit; TMP defers the actual activation to the next frame.
+                input.Select();
+                input.ActivateInputField();
+                input.caretPosition = input.text.Length;
+            }
+
+            /// <summary>
+            /// Empties the box without firing <c>onValueChanged</c>, so closing the overlay
+            /// leaves nothing stale behind for the next open to show or to re-list.
+            /// </summary>
+            internal static void ClearSearchField() {
+                var input = SearchInput;
+                if (input != null && !string.IsNullOrEmpty(input.text))
+                    input.SetTextWithoutNotify("");
+            }
+
             private static void PopulateDropdown(string text) {
                 Log.Debug("PopulateDropdown ENTER: text='{0}'".F(text));
                 if (DropdownItemsParent == null) {
@@ -314,6 +441,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                 for (int i = DropdownItemsParent.childCount - 1; i >= 0; i--)
                     UnityEngine.Object.DestroyImmediate(DropdownItemsParent.
                         GetChild(i).gameObject);
+                // The rows went with the children: a highlight left over from the previous
+                // query must not be committed against a dropdown that no longer holds it.
+                rows.Clear();
+                highlightedRow = -1;
                 Log.Debug("PopulateDropdown: children destroyed");
                 if (string.IsNullOrEmpty(text?.Trim())) {
                     Log.Debug("PopulateDropdown: text empty, returning early");
@@ -327,12 +458,37 @@ namespace BobbyModding.MaterialSearchOverlay {
                     return;
                 }
                 foreach (var entry in matches)
-                    CreateDropdownRow(entry);
+                    rows.Add(CreateDropdownRow(entry));
+                CreateHintRow();
                 Patches.DropdownContainer.SetActive(true);
                 Log.Debug("PopulateDropdown EXIT: showing {0} rows".F(matches.Count));
             }
 
-            private static void CreateDropdownRow(SearchEntry entry) {
+            /// <summary>
+            /// Adds the "arrow keys and Enter" caption above the results. Built with the rows
+            /// rather than once alongside the panel, because every populating pass destroys
+            /// all children of the list before filling it again. It deliberately sits outside
+            /// <see cref="rows"/>: only real results may be highlighted or committed.
+            /// </summary>
+            private static void CreateHintRow() {
+                var hint = new GameObject("SelectionHint");
+                hint.transform.SetParent(DropdownItemsParent, false);
+                hint.transform.SetSiblingIndex(0);
+                var text = hint.AddComponent<TextMeshProUGUI>();
+                text.text = MSearch.SELECTION_HINT;
+                text.fontSize = 11;
+                // Dimmer than a result name, so it reads as a caption and not as a row that
+                // can be picked.
+                text.color = new Color(0.72f, 0.72f, 0.72f);
+                text.alignment = TextAlignmentOptions.Left;
+                text.textWrappingMode = TextWrappingModes.Normal;
+                text.raycastTarget = false;
+                var layout = hint.AddComponent<LayoutElement>();
+                layout.flexibleWidth = 1;
+                layout.minHeight = 14;
+            }
+
+            private static DropdownRow CreateDropdownRow(SearchEntry entry) {
                 string name = entry.DisplayName;
                 Color swatch = entry.Swatch;
                 Log.Debug("CreateDropdownRow: {0} '{1}' swatch={2}".F(entry.Kind, name, swatch));
@@ -345,7 +501,11 @@ namespace BobbyModding.MaterialSearchOverlay {
                 layout.childForceExpandWidth = false;
                 layout.childForceExpandHeight = false;
                 var bg = row.AddComponent<Image>();
-                bg.color = new Color(0, 0, 0, 0.01f);
+                bg.color = NORMAL_ROW_COLOR;
+                var built = new DropdownRow {
+                    Entry = entry,
+                    Background = bg
+                };
                 var swatchObj = new GameObject("Swatch");
                 swatchObj.transform.SetParent(row.transform, false);
                 var swatchImg = swatchObj.AddComponent<Image>();
@@ -383,17 +543,107 @@ namespace BobbyModding.MaterialSearchOverlay {
                 };
                 enter.callback.AddListener(_ => {
                     Log.Debug("PointerEnter: name='{0}'".F(name));
-                    bg.color = new Color(1, 1, 1, 0.15f);
+                    SetHighlight(rows.IndexOf(built));
                 });
                 trigger.triggers.Add(enter);
-                var exit = new EventTrigger.Entry {
-                    eventID = EventTriggerType.PointerExit
-                };
-                exit.callback.AddListener(_ => {
-                    Log.Debug("PointerExit: name='{0}'".F(name));
-                    bg.color = new Color(0, 0, 0, 0.01f);
-                });
-                trigger.triggers.Add(exit);
+                // No pointer exit handler on purpose. The highlight marks the row Enter would
+                // commit, so it stays where the pointer left it instead of going dark before
+                // the user can press Enter.
+                return built;
+            }
+
+            /// <summary>
+            /// Moves the highlight onto one row, or clears it for -1, repainting the rows on
+            /// the way. Pointer enter and the arrow keys share this one highlight, so there is
+            /// never a hovered row and a keyboard row lit at the same time.
+            /// </summary>
+            private static void SetHighlight(int index) {
+                highlightedRow = rows.Count == 0 ? -1 : Mathf.Clamp(index, -1,
+                    rows.Count - 1);
+                for (int i = 0; i < rows.Count; i++)
+                    rows[i].Background.color = i == highlightedRow ? HIGHLIGHTED_ROW_COLOR :
+                        NORMAL_ROW_COLOR;
+            }
+
+            /// <summary>
+            /// Steps the highlight by one row, wrapping at both ends. With nothing highlighted,
+            /// which is the state after every keystroke, either arrow steps onto the first row
+            /// so that the first key press gives Enter something to commit.
+            /// </summary>
+            private static void MoveHighlight(int delta) {
+                if (rows.Count == 0)
+                    return;
+                SetHighlight(highlightedRow < 0 ? 0 : (highlightedRow + delta + rows.Count) %
+                    rows.Count);
+                Log.Debug("MoveHighlight: row {0}/{1} '{2}'".F(highlightedRow,
+                    rows.Count - 1, rows[highlightedRow].Entry?.DisplayName ?? "null"));
+            }
+
+            /// <summary>
+            /// Steps the dropdown highlight while an arrow key is held. Called from a postfix
+            /// on the field's per frame selected-object update: that runs only while the search
+            /// field is focused, which is exactly the window in which the user is typing and
+            /// could press Enter, and it runs after TMP has handled the frame's keys.
+            /// <para>
+            /// The repeat is timed here rather than taken from the OS: Unity only reports the
+            /// initial press through <c>Input.GetKeyDown</c>, repeat events depend on the
+            /// player's keyboard repeat setting and repeat rate, and TMP spends those events
+            /// moving the caret. A short delay followed by a fixed interval gives the same feel
+            /// on every machine, and keeps working when keyboard repeat is switched off.
+            /// </para>
+            /// </summary>
+            internal static void HandleNavigationKey(TMP_InputField field) {
+                if (field == null || field != SearchInput || rows.Count == 0 ||
+                        Patches.DropdownContainer == null || !Patches.DropdownContainer.
+                        activeInHierarchy) {
+                    heldDirection = 0;
+                    return;
+                }
+                bool down = Input.GetKey(KeyCode.DownArrow);
+                bool up = Input.GetKey(KeyCode.UpArrow);
+                // Both keys held is not a direction; treating it as "none" means letting one
+                // go starts a fresh press rather than a half way repeat.
+                int direction = down == up ? 0 : (down ? 1 : -1);
+                if (direction == 0) {
+                    if (heldDirection != 0) {
+                        // The key was just let go. TMP may have left the caret at the start of
+                        // the query on its last repeat, so put it back before the player types.
+                        heldDirection = 0;
+                        RestoreCaret(field);
+                    }
+                    return;
+                }
+                if (direction != heldDirection) {
+                    // First step lands immediately, the rest wait for the repeat delay.
+                    heldDirection = direction;
+                    nextRepeatTime = Time.unscaledTime + REPEAT_DELAY;
+                    StepHighlight(field, direction);
+                    return;
+                }
+                // TMP keeps applying its own caret jump for as long as the key repeats, so the
+                // caret is put back every frame, not only when the highlight actually moves.
+                RestoreCaret(field);
+                if (Time.unscaledTime < nextRepeatTime)
+                    return;
+                nextRepeatTime = Time.unscaledTime + REPEAT_INTERVAL;
+                StepHighlight(field, direction);
+            }
+
+            /// <summary>Moves the highlight one row and leaves the query caret at the end.</summary>
+            private static void StepHighlight(TMP_InputField field, int direction) {
+                MoveHighlight(direction);
+                RestoreCaret(field);
+            }
+
+            /// <summary>
+            /// Puts the caret after the query. TMP treats Up/Down as caret jumps in a single
+            /// line field, so without this the next character typed would land in front of the
+            /// text - or, on the release of an Up held long enough to repeat, at the start.
+            /// </summary>
+            private static void RestoreCaret(TMP_InputField field) {
+                int end = field.text.Length;
+                if (field.caretPosition != end)
+                    field.caretPosition = end;
             }
 
             /// <summary>
@@ -450,6 +700,11 @@ namespace BobbyModding.MaterialSearchOverlay {
                     Log.Debug("OnResultSelected: SearchInput IS NULL");
                 Log.Debug("OnResultSelected: hiding dropdown");
                 Patches.DropdownContainer?.SetActive(false);
+                // The rows stay in the inactive container until the next populating pass
+                // destroys them, but the highlight must not outlive the selection: a second
+                // Enter should not commit a row from a dropdown that is no longer showing.
+                rows.Clear();
+                highlightedRow = -1;
                 suppressDropdown = false;
                 Log.Debug("OnResultSelected EXIT");
             }
@@ -650,6 +905,23 @@ namespace BobbyModding.MaterialSearchOverlay {
             }
         }
 
+        /// <summary>
+        /// Focuses the search box when this overlay opens. TMP cannot activate a field whose
+        /// GameObject is inactive, and the legend is still hidden while the overlay's own
+        /// <c>Enable</c> runs, so the legend being shown is the first point that can work.
+        /// Both ways in arrive here: the overlay menu button and the keybind both go through
+        /// <c>OverlayScreen.ToggleOverlay</c>, which shows the legend after enabling the mode.
+        /// </summary>
+        [HarmonyPatch(typeof(OverlayLegend), "SetLegend", typeof(OverlayModes.Mode),
+            typeof(bool))]
+        public static class OverlayLegend_SetLegend_Patch {
+            internal static void Postfix(OverlayModes.Mode mode) {
+                if (AutoFocusSearch && mode != null && mode.ViewMode() ==
+                        MaterialSearchOverlay.ID)
+                    OverlayLegend_OnSpawn_Patch.FocusSearchField();
+            }
+        }
+
         [HarmonyPatch(typeof(OverlayScreen), "RegisterModes")]
         public static class OverlayScreen_RegisterModes_Patch {
             internal static void Postfix(OverlayScreen __instance) {
@@ -799,6 +1071,22 @@ namespace BobbyModding.MaterialSearchOverlay {
                         selectable.GetComponent<BackwallSelectionObject>() != null)
                     return MaterialSearchOverlay.ShouldShowHoverCell();
                 return overlay.ShouldShowHoverEntry(selectable);
+            }
+        }
+
+        /// <summary>
+        /// Feeds the arrow keys to the search dropdown. This sits on TMP's own per frame
+        /// selected-object update rather than on its key handling because that handler returns
+        /// the protected nested <c>EditState</c>, which a prefix in this assembly cannot
+        /// declare, so the press cannot be swallowed before TMP sees it. A postfix needs
+        /// nothing swallowed: the arrow keys are unbound in the base game, the update runs only
+        /// while the field is focused, and it runs after TMP has moved the caret - which is
+        /// exactly where the caret has to be put back.
+        /// </summary>
+        [HarmonyPatch(typeof(TMP_InputField), "OnUpdateSelected")]
+        public static class TMPInputField_OnUpdateSelected_Patch {
+            internal static void Postfix(TMP_InputField __instance) {
+                OverlayLegend_OnSpawn_Patch.HandleNavigationKey(__instance);
             }
         }
     }

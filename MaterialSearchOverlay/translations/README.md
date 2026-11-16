@@ -36,6 +36,7 @@ Paths below are shortened: `...` means
 | `...OVERLAYS.MATERIALSEARCH.BUTTON` | Material Search Overlay | Button label in overlay menu |
 | `...OVERLAYS.MATERIALSEARCH.TOOLTIP` | Search for materials, equipment, creatures and more by typing their name | Hover tooltip for the button |
 | `...OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER` | Type a name to search... | Placeholder text in search box |
+| `...OVERLAYS.MATERIALSEARCH.SELECTION_HINT` | Up/Down arrows to choose, Enter to select | Caption above the dropdown results |
 | `...OVERLAYS.MATERIALSEARCH.MASS_LABEL` | Natural Tile: {0} \| Debris: {1} \| Buildings: {2} \| Backwall: {3} | Mass breakdown after selecting an element |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_LABEL` | Found: {0} | Header for the per-kind count summary |
 | `...OVERLAYS.MATERIALSEARCH.NO_MATCHES_LABEL` | No matches found | Shown when a search matches nothing in the colony |

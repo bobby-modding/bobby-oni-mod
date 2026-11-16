@@ -16,6 +16,11 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         internal static Dictionary<SimHashes, Color> ElementColors { get; set; }
 
+        /// <summary>
+        /// Painted over every cell the current search does not highlight, including the whole
+        /// map while the search is still empty. Opaque, so the overlay always opens on the same
+        /// grey backdrop and a matching tile stands out against it.
+        /// </summary>
         internal static readonly Color NON_MATCHING_COLOR = new Color(0.33f, 0.33f, 0.33f);
 
         /// <summary>
@@ -29,13 +34,6 @@ namespace BobbyModding.MaterialSearchOverlay {
                 return color;
             return SearchIndex.SwatchFor(TargetKind.Material);
         }
-
-        /// <summary>
-        /// Returned by the cell overlay when the search has no element matches at all, which
-        /// is the normal case for a creature or duplicant search. Leaves the map untouched
-        /// instead of dimming every tile.
-        /// </summary>
-        internal static readonly Color NO_CELL_OVERLAY = Color.clear;
 
         /// <summary>
         /// Immutable per refresh snapshot of the active search. Written on the main thread by
@@ -108,13 +106,13 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         internal static Color GetColor(SimDebugView _, int cell) {
-            if (Instance == null)
-                return NO_CELL_OVERLAY;
+            if (Instance == null || ElementColors == null)
+                return NON_MATCHING_COLOR;
             // Read the snapshot reference exactly once: the main thread swaps it wholesale
             // on refresh, so a single read is all that is safe to do off-thread.
             var matches = snapshot;
             if (matches == null || matches.Elements.Count == 0)
-                return NO_CELL_OVERLAY;
+                return NON_MATCHING_COLOR;
             var element = Grid.Element[cell];
             if (element == null)
                 return NON_MATCHING_COLOR;
@@ -278,8 +276,13 @@ namespace BobbyModding.MaterialSearchOverlay {
                 camera.cullingMask &= ~cameraLayerMask;
             if (SelectTool.Instance != null)
                 SelectTool.Instance.ClearLayerMask();
-            if (Patches.SearchField != null)
+            if (Patches.SearchField != null) {
                 Patches.SearchField.SetActive(false);
+                // The query has just been dropped from the match set, so the box must not
+                // keep showing it: an auto-focused reopen would otherwise list rows for a
+                // search that is no longer lit up on the map.
+                Patches.ClearSearchField();
+            }
             if (Patches.DropdownContainer != null) {
                 Patches.DropdownContainer.SetActive(false);
                 Log.Debug("Disable: DropdownContainer set inactive");
