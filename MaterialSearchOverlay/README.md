@@ -8,6 +8,9 @@ An Oxygen Not Included mod that lets you search the colony by name and highlight
 - **Own overlay icon** — the overlay bar button and the overlay legend use a custom magnifier icon instead of the vanilla materials overlay icon
 - **Type badges** — every dropdown result is labelled with what kind of thing it is, so a name that exists in several categories can still be picked unambiguously
 - **Keyboard selection** — after typing a name, the arrow keys step through the dropdown (hold one to keep moving) and Enter pins the highlighted row, exactly as clicking it would; a caption above the results spells the shortcut out
+- **Result cap** — a search keeps at most `Maximum Search Results` matches (50 by default). The dropdown rows and the map highlight are exactly the same set, so a one-letter query stays bounded in both places
+- **Auto focus** — the search box takes the keyboard the moment the overlay opens, whether it was opened from the overlay menu button or from the keybind, so you can start typing straight away
+- **Keybind in tooltip** — the button's hover tooltip ends with the currently assigned key, spelled out the same way vanilla overlays do, and it follows rebinds. A keybind that stacks modifiers is spelled out in full (`[SHIFT + CTRL + F]`); on its own the game drops the modifier names and shows `[+ F]`
 - **Visual highlight** — matching entities light up in place; for elements, matching tiles, natural backwalls, buildings, and debris are colored in the element's natural color and everything else is dimmed to a flat grey, so the overlay opens on a grey map and only the matches pick up color
 - **Mass totals** — selecting an element reports its total mass broken down by natural tiles, visible natural backwalls, debris, and buildings
 - **Count summary** — for everything else the label reports how many of each kind were found in the colony, counting stacked items by their units (299 stored Arbor Acorns read as `299 seeds`, not as the one or few piles they occupy); food instead reports its combined mass and calories (e.g. `20 kg (80,000 kcal)`), or mass only when calorie data is unavailable
@@ -52,12 +55,25 @@ Subscribe on the Steam Workshop.
 
 ## Usage
 
-1. Open the overlay menu and click **Material Search Overlay** (or press the assigned keybind)
-2. Type any part of a name into the search field
+1. Open the overlay menu and click **Material Search Overlay** (or press the assigned keybind — the button's tooltip shows which key that is)
+2. Type any part of a name into the search field — with auto focus on, the field already has the keyboard when the overlay opens, so typing can start right away; while it has the keyboard, typing letters into it takes over from the camera keys, and closing the overlay hands the keyboard back
 3. Matching results appear in the dropdown, each labelled with its kind — click one to pin it, or step through them with `Up`/`Down` and press `Enter`
 4. The map is dimmed grey from the moment the overlay opens; every match then lights up in its own colour on top of that grey, so only the matches show colour
 5. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
 6. Click a cell to select the match directly; click again to step through the other matches in that cell
+
+Closing the overlay clears the search field, so every time you open it the box is empty again.
+
+## Mod options
+
+The PLib **Mods** screen has a **Material Search Overlay** options page. Changes take effect straight away — no restart needed.
+
+| Option | Default | What it does |
+|---|---|---|
+| Enable Debug Logging | Off | Writes verbose `[PLib/MaterialSearchOverlay]` diagnostics to `Player.log` |
+| Show Type Badges | On | Labels every dropdown row with what kind of result it is |
+| Maximum Search Results | 50 | How many matches a search keeps, in the dropdown and on the map (they are always the same set). The options dialog clamps the value to 5–100 |
+| Focus Search Box On Open | On | Puts the cursor in the search box as soon as the overlay opens, from the menu button or the keybind alike. While the box has the keyboard, the camera keys type into it instead of moving the view |
 
 ## Building from source
 

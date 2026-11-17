@@ -887,6 +887,80 @@ namespace BobbyModding.MaterialSearchOverlay {
             }
         }
 
+        /// <summary>
+        /// Names a keybind that uses more than one modifier. What the game reads from a bind
+        /// is a set of bits, one per modifier, but its formatter tests that field with a
+        /// switch holding one case per single modifier, so a bind with two of them set
+        /// matches none of them and the name comes back empty: the key bound here as Shift
+        /// plus Ctrl draws "[+ F]" in the overlay button's hover text instead of
+        /// "[SHIFT + CTRL + F]". The rewrite replaces the game's own name at the point where
+        /// the game already puts it, joins the set bits in the order that same switch tests
+        /// them and keeps the same shape (upper case included), so the hover text of the
+        /// other {Hotkey} strings gains the names it was missing as well and not only the
+        /// one this overlay draws.
+        /// </summary>
+        /// <remarks>
+        /// Only binds with two or more bits set are rewritten; none and one are shapes the
+        /// game spells correctly, so leaving those to vanilla keeps its wording, its gamepad
+        /// branch and its translated key names, and its default bindings are all single
+        /// modifier, so a stock game is shown nothing different.
+        /// </remarks>
+        [HarmonyPatch(typeof(GameUtil), "GetActionString")]
+        public static class GameUtil_GetActionString_Patch {
+            private static bool missing_names_logged;
+
+            internal static void Postfix(Action action, ref string __result) {
+                // Gamepad draws a glyph and NumActions is answered before the game reads
+                // anything; both are shapes this has nothing to correct.
+                if (KInputManager.currentControllerIsGamepad || action == Action.NumActions)
+                    return;
+                // The game's own ActionToBinding reads the same table but throws on an action
+                // that has no entry in it, and a postfix has nothing to catch that at.
+                var binding = GameInputMapping.FindEntry(action);
+                int modifiers = (int)binding.mModifier;
+                // Zero or one bit set: a shape the game already names.
+                if (modifiers == 0 || (modifiers & (modifiers - 1)) == 0)
+                    return;
+                __result = (JoinModifiers(modifiers) + " + " +
+                    GameUtil.GetKeycodeLocalized(binding.mKeyCode)).ToUpper();
+                if (!missing_names_logged) {
+                    missing_names_logged = true;
+                    Log.Debug("GetActionString: {0} has {1} modifiers and the game named none of them, now {2}".
+                        F(action, CountBits(modifiers), __result));
+                }
+            }
+
+            /// <summary>
+            /// The set modifier bits named in the order the game's own switch tests them,
+            /// joined with " + ". The names are the game's own translatable ones, so a
+            /// language that spells a single modifier a certain way spells it that way here
+            /// too.
+            /// </summary>
+            private static string JoinModifiers(int modifiers) {
+                var names = new List<string>();
+                if ((modifiers & (int)Modifier.Shift) != 0)
+                    names.Add(STRINGS.INPUT.SHIFT.ToString());
+                if ((modifiers & (int)Modifier.Ctrl) != 0)
+                    names.Add(STRINGS.INPUT.CTRL.ToString());
+                if ((modifiers & (int)Modifier.CapsLock) != 0)
+                    names.Add(GameUtil.GetKeycodeLocalized(KKeyCode.CapsLock));
+                if ((modifiers & (int)Modifier.Alt) != 0)
+                    names.Add(STRINGS.INPUT.ALT.ToString());
+                if ((modifiers & (int)Modifier.Backtick) != 0)
+                    names.Add(GameUtil.GetKeycodeLocalized(KKeyCode.BackQuote));
+                return string.Join(" + ", names);
+            }
+
+            private static int CountBits(int value) {
+                int count = 0;
+                while (value != 0) {
+                    value &= value - 1;
+                    count++;
+                }
+                return count;
+            }
+        }
+
         [HarmonyPatch(typeof(OverlayMenu), "InitializeToggles")]
         public static class OverlayMenu_InitializeToggles_Patch {
             internal static void Postfix(ICollection<KIconToggleMenu.ToggleInfo> ___overlayToggleInfos) {

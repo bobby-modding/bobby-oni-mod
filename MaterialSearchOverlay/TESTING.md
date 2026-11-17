@@ -1,6 +1,6 @@
 # Material Search Overlay — In-Game Test Checklist
 
-**Mod version:** 2.0.0 · **Target build:** U60-763023 · **DLC:** all installed
+**Mod version:** 2.2.0 · **Target build:** U60-763023 · **DLC:** all installed
 **Goal:** prove every searchable kind works in game, with one sample name per category.
 
 **How to use this file:**
@@ -43,8 +43,9 @@
 ## 1. Smoke test (run on every build, ~5 minutes)
 
 - [ ] **ST-1** The overlay bar (top-right, same row as vanilla overlays) shows **Material Search Overlay** with the custom **magnifier icon**, not the vanilla materials icon.
-- [ ] **ST-2** Hovering the icon shows the tooltip: *"Search for materials, equipment, creatures and more by typing their name"*.
-- [ ] **ST-3** Bind the keybind: **Options → Key Bindings → Open Material Search Overlay**; assign a key; pressing it opens the overlay.
+- [ ] **ST-2** Hovering the icon shows the tooltip: *"Search for materials, equipment, creatures and more by typing their name"* followed by the assigned key (same style as vanilla overlay tooltips; while nothing is bound it shows the game's unbound placeholder).
+- [ ] **ST-3** Bind the keybind: **Options → Key Bindings → Open Material Search Overlay**; assign a key; pressing it opens the overlay. Hover the button again: the tooltip now ends with the key you assigned; rebind to a different key and the tooltip follows it (check after the buttons next refresh, e.g. after toggling the overlay).
+- [ ] **ST-3b** Rebind to a key that stacks two modifiers: hold Shift and Ctrl while assigning, so the game writes the pair into `keybindings.json`. Expected: the tooltip spells all three names, e.g. `...typing their name [SHIFT + CTRL + F]`. Vanilla drops the modifier names in this case and shows `[+ F]`, so `[+ F]` is a failure. With debug logging on, `Player.log` also carries one `[PLib/MaterialSearchOverlay] GetActionString: ... named none of them, now [SHIFT + CTRL + F]` line.
 - [ ] **ST-4** Click the overlay button. Expected: the button is highlighted, the map switches to the overlay, and the legend opens.
 - [ ] **ST-5** The legend shows the magnifier icon, the title **MATERIAL SEARCH OVERLAY**, and a description listing the searchable kinds. No raw `STRINGS.` keys and no `{0}` placeholders are visible.
 - [ ] **ST-6** The search box is visible in the legend panel with the placeholder **"Type a name to search..."**. It is visible only while this overlay is active.
@@ -55,8 +56,8 @@
   - the search box now reads that row's name,
   - matching critters light up green,
   - a label appears: `Found: N critters` (N = number of hatches in the colony).
-- [ ] **ST-10** Close the overlay. Expected: the map returns to normal, all highlights are gone, and the legend/search box disappear.
-- [ ] **ST-11** Re-open the overlay. Expected: the search box is empty, no dropdown, no label, no leftover highlights.
+- [ ] **ST-10** Close the overlay. Expected: the map returns to normal, all highlights are gone, and the legend/search box disappear; any text you had typed is discarded.
+- [ ] **ST-11** Re-open the overlay. Expected: the search box is **empty** — even if you had typed something before closing — no dropdown, no label, no leftover highlights.
 - [ ] **ST-12** Switch to another overlay (e.g. Oxygen), then back. Expected: the search box and label are hidden in the other overlay and the search is empty when you return.
 
 ---
@@ -69,12 +70,12 @@
 - [ ] **SB-4 Empty box:** delete the text. Expected: dropdown closes, highlights clear, label disappears.
 - [ ] **SB-5 No match:** type `zzzz`. Expected: no dropdown, no highlight, no label, no error; any previous highlight is cleared.
 - [ ] **SB-6 Ranking:** type `hatch`. Expected: names that exactly match or start with the query come before names that merely contain it; each group is alphabetical.
-- [ ] **SB-7 Result cap:** type a single letter, e.g. `e`. Expected: at most 50 rows, the game stays responsive, and no exception appears in the log. If the list runs off the legend and rows cannot be reached, note it as a layout issue.
+- [ ] **SB-7 Result cap:** type a single letter, e.g. `e`. Expected: at most `Maximum Search Results` rows (50 by default), the game stays responsive, and no exception appears in the log. If the list runs off the legend and rows cannot be reached, note it as a layout issue.
 - [ ] **SB-8 Multi-kind badges:** type `steel`. Expected: at least **two** rows named `Steel` — one **Material** badge, one **Industrial** badge — with different swatch colours.
 - [ ] **SB-9 Typing vs selecting:** with `hatch` typed, everything matching (critters, eggs, etc.) is highlighted and **no label** is shown. Click one row: only that kind stays highlighted and the label appears.
 - [ ] **SB-10 Keyboard selection:** type `copper ore`. Expected: a dim caption **"Up/Down arrows to choose, Enter to select"** sits above the rows and no row is highlighted yet. Press `Down` — the first row brightens. `Down` again moves one row lower, `Up` moves back, `Up` from the first row wraps to the last row. Press `Enter`: the dropdown closes, the box shows that row's name, the map shows that material, and the mass label appears — identical to clicking the row.
 - [ ] **SB-11 Keyboard edge cases:** with `copper ore` typed and nothing highlighted, `Enter` selects nothing (the box simply loses focus). Highlight a row, then type another character: the dropdown rebuilds with no highlight and the new character is appended to the **end** of the query, not the front. Arrow keys pressed while the box is not focused do nothing, and pressing them with no results (`zzzz`) does nothing either.
-- [ ] **SB-12 Holding an arrow:** with `e` typed (50 rows), press and **hold** `Down`. Expected: the highlight steps one row immediately, pauses briefly, then keeps stepping down without further presses until the key is released; `Up` does the same upwards. A quick tap still moves exactly one row. After releasing, type a character: it appears at the **end** of the query.
+- [ ] **SB-12 Holding an arrow:** with `e` typed (the full cap, 50 rows by default), press and **hold** `Down`. Expected: the highlight steps one row immediately, pauses briefly, then keeps stepping down without further presses until the key is released; `Up` does the same upwards. A quick tap still moves exactly one row. After releasing, type a character: it appears at the **end** of the query.
 
 ---
 
@@ -235,7 +236,7 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 ## 7. Overlay and save lifecycle
 
 - [ ] **LC-1 Switching overlays:** switch to another overlay and back. Search text, dropdown, label, and highlights are cleared.
-- [ ] **LC-2 Close/re-open:** closing and re-opening the overlay starts clean; nothing from the old search is stuck on the map.
+- [ ] **LC-2 Close/re-open:** closing and re-opening the overlay starts clean — the search text is cleared, and nothing from the old search is stuck on the map.
 - [ ] **LC-3 Same-session save switch:** load save A, search a few samples, return to the main menu, load save B, then open the overlay and search again. Expected:
   - rows reflect save B,
   - no duplicated rows (e.g. the general `Artifact` row appears exactly once, not twice),
@@ -247,17 +248,21 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 
 ## 8. Options
 
-- [ ] **OP-1 Defaults:** on a fresh config, **Enable Debug Logging = OFF** and **Show Type Badges = ON**.
-- [ ] **OP-2 Badges off:** turn **Show Type Badges** off, restart, and search `steel`. Rows show the swatch and name but no badge text; clicking still works.
-- [ ] **OP-3 Logging off:** turn **Enable Debug Logging** off, restart, and search once. No new debug-level `[PLib/MaterialSearchOverlay]` lines appear (the one-time mod-init INFO lines still do).
-- [ ] **OP-4 Persistence:** both options keep their values after a restart.
+- [ ] **OP-1 Defaults:** on a fresh config, **Enable Debug Logging = OFF**, **Show Type Badges = ON**, **Maximum Search Results = 50**, **Focus Search Box On Open = ON**.
+- [ ] **OP-2 Badges off:** turn **Show Type Badges** off and search `steel` right away — no restart needed. Rows show the swatch and name but no badge text; clicking still works.
+- [ ] **OP-3 Logging off:** turn **Enable Debug Logging** off and search once. No new debug-level `[PLib/MaterialSearchOverlay]` lines appear (the one-time mod-init INFO lines still do).
+- [ ] **OP-4 Persistence:** all four options keep their values after a restart.
 - [ ] **OP-5** The mod options page opens without errors and shows the GitHub link.
+- [ ] **OP-6 Result cap live:** set **Maximum Search Results** to 10 in the options dialog, then (without restarting) search `e`. Expected: the dropdown caps at **10 rows**, and the map highlights only the matching entries in that same capped list — not more than the dropdown shows. Raise it back to 100 and retype: up to 100 rows now.
+- [ ] **OP-7 Auto focus on:** with **Focus Search Box On Open = ON** (the default), open the overlay from the menu button — the box already has the keyboard, so typing works without clicking it first. Then close it and reopen via the **keybind**: focused the same way.
+- [ ] **OP-8 Auto focus off:** set **Focus Search Box On Open = OFF** and reopen the overlay. Expected: the box does not grab the keyboard on open — nothing types until you click into the box.
 
 ---
 
 ## 9. Localization
 
 - [ ] **LOC-1** Switch the game language to German, Russian, and Simplified Chinese (restart/reload if the game requires it). Check:
+  - the overlay button tooltip (its key at the end should still name the assigned binding),
   - the search placeholder,
   - the overlay legend title/description,
   - the kind badges,
@@ -277,7 +282,7 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - [ ] **LOG-5 Stacked counts:** when units differ from objects, `Count summary: <kind> = <units> units across <objects> objects` is logged.
 - [ ] **LOG-6 Errors:** no `Exception`, `NullReferenceException`, `MissingMethodException`, or Harmony patch failure lines anywhere.
 - [ ] **PERF-1** First overlay open after loading a save finishes quickly (well under a second on a normal PC). Opening it again after that is instant.
-- [ ] **PERF-2** Typing quickly does not stutter, and a one-letter query is capped at 50 rows.
+- [ ] **PERF-2** Typing quickly does not stutter, and a one-letter query is capped at `Maximum Search Results` rows (50 by default).
 
 ---
 
@@ -294,7 +299,8 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - Some DLC-gated rows (e.g. `Bionic Duplicant`) can appear in a save where that content is unavailable; they highlight nothing.
 - The overlay has no custom legend rows beyond its description.
 - The dropdown highlight starts on no row after every keystroke; the first `Up`/`Down` steps onto the first row, and both ends wrap. Hovering a row moves the same highlight, and it stays on that row after the pointer leaves.
-- With more rows than fit in the legend panel (`e` returns 50), the keyboard highlight can step below the visible area; the list does not auto-scroll to follow it yet.
+- With more rows than fit in the legend panel (at high caps — e.g. `e` returns the full `Maximum Search Results` of 50), the keyboard highlight can step below the visible area; the list does not auto-scroll to follow it yet.
+- While the search box has the keyboard (auto focus, or after clicking into it), letters and camera keys type into it instead of moving the view or firing shortcuts; the overlay button still closes the overlay, and closing hands the keyboard back.
 - Artifacts cannot be spawned with the sandbox Spawn tool.
 - Debug logging is off by default and is very verbose when on.
 
@@ -319,7 +325,7 @@ Notes:
 
 ```text
 Item ID:        e.g. MAT-4
-Mod version:    2.0.0
+Mod version:    2.2.0
 Game build:     U60-763023
 DLC:            all / base game
 Save:           fresh sandbox / other
@@ -359,7 +365,7 @@ Search each query and pick the row with the listed badge.
 | IND | `Steel` | Industrial (second `Steel` row) | `Found: N industrial products` |
 | ART | `Artifact` | Artifact | `Found: N artifacts` |
 | — | `zzzz` | none | no dropdown, no highlight |
-| — | `e` | any | at most 50 rows, responsive |
+| — | `e` | any | at most the result cap (50 by default) rows, responsive |
 
 ---
 

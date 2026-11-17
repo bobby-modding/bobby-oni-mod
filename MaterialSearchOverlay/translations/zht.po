@@ -33,7 +33,7 @@ msgstr "材料搜尋"
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIP
 msgctxt "BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.TOOLTIP"
-msgid "Search for materials, equipment, creatures and more by typing their name"
+msgid "Search for materials, equipment, creatures and more by typing their name {Hotkey}"
 msgstr ""
 
 #. BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings.UI.OVERLAYS.MATERIALSEARCH.SEARCH_PLACEHOLDER
