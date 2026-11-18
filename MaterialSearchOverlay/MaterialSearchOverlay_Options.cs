@@ -31,11 +31,27 @@ namespace BobbyModding.MaterialSearchOverlay {
         [JsonProperty]
         public bool AutoFocusSearch { get; set; }
 
+        /// <summary>
+        /// How many rows each section of the position list shows at once. Every section has
+        /// its own scroll pane, so a big vein cannot grow the legend off the screen and the
+        /// rest of the overlay stays visible around it.
+        /// </summary>
+        [Option("Maximum Location Rows", "How many rows each section of the position list shows at once. A longer section scrolls instead of making the legend taller. Range 2-12.")]
+        [Limit(MIN_LOCATION_ROWS, MAX_LOCATION_ROWS)]
+        [JsonProperty]
+        public int MaxLocationRows { get; set; }
+
+        /// <summary>Kept in step with the clamp <see cref="MatchLocationUI"/> applies.</summary>
+        private const int MIN_LOCATION_ROWS = MatchLocationUI.MIN_VISIBLE_ROWS;
+
+        private const int MAX_LOCATION_ROWS = MatchLocationUI.MAX_VISIBLE_ROWS;
+
         public MaterialSearchOverlayOptions() {
             EnableDebugLogging = false;
             ShowTypeBadges = true;
             MaxSearchResults = SearchIndex.DEFAULT_MAX_RESULTS;
             AutoFocusSearch = true;
+            MaxLocationRows = 5;
         }
 
         /// <summary>

@@ -233,6 +233,26 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 
 ---
 
+## 6b. Position list and pinned pause *(new in 2.3.0)*
+
+- [ ] **PL-1 Only after a selection:** open the overlay and type `Copper Ore`. While typing, no position list is shown. Click a dropdown row (or press Enter): the list appears below the mass/count label.
+- [ ] **PL-2 Hidden again by typing:** with a list showing, type one more character in the search box, then click back into the box. Expected: the list disappears both times and only comes back when a row is pinned again.
+- [ ] **PL-3 Coordinates:** spawn a single piece of `Copper Ore` debris near the bottom-left of the map. Select the `Copper Ore` row. Expected: an item row ending in its X/Y, both small non-negative numbers counting from the asteroid's bottom-left corner. Click it: the camera lands on that debris.
+- [ ] **PL-4 Tile areas:** a copper ore vein is one `Tile areas (N)` row showing the centre coordinates and `(N cells)`. Press `+`: one row per cell appears directly under the area row, coordinates descend through the area, and the button becomes `-`. Pressing `-` collapses it again.
+- [ ] **PL-5 Cell paging:** find or sandbox-paint a matching tile area with more than 100 cells, expand it. Expected: exactly 100 cell rows plus a `Page 1 of N` row with a `Next` button; `Next` moves through the pages and `Previous` goes back. The area's own row stays where it was.
+- [ ] **PL-6 Backwall areas:** with a visible matching backwall (e.g. `Sandstone`), a `Backwall areas (N)` section appears, grouped and expandable exactly like tiles.
+- [ ] **PL-7 Items:** a query matching loose items and buildings (`Hatch Egg`, `Steel`, an artifact) shows `Items (N)` with one row per object, sorted by name; loose debris reads `(debris)`, a finished building `(building)`, and a container holding a match `(contents)`. Duplicants and critters read `at X, Y` with no source word.
+- [ ] **PL-8 Camera pan:** click a tile area row, a cell row, a backwall row, and an item row in turn. Each click moves the camera to that spot and does **not** change the zoom level.
+- [ ] **PL-9 Forced pause:** select any row, then immediately check the speed controls — the game is paused. Press the pause hotkey (default space): nothing happens, the game stays paused and the pause button stays lit. Click the pause button, then the play button: also nothing.
+- [ ] **PL-10 Still paused after close:** close the overlay while a result is pinned. Expected: the game is still paused. Press the pause key once: the game resumes at normal speed.
+- [ ] **PL-11 Already paused:** pause the game yourself, then open the overlay and select a row. Close it. Expected: still paused, and one press of the pause key resumes (not two).
+- [ ] **PL-12 Snapshot, not live:** with a result pinned, spawn a matching item with the Sandbox tools (spawning works while paused). Expected: the list does not change and no extra row appears. Select the row again: the new item shows up.
+- [ ] **PL-13 Load/quit:** pin a result, then load a save or quit to the main menu. Expected: no crash, the new session starts at whatever speed the save has, and the pause key works normally.
+- [ ] **PL-14 Logs:** with debug logging on, selecting a row logs `ForcedPause: begin, IsPaused=True`, `MatchLocations: ... tiles in ... areas, ... backwall cells, ... items in <ms>ms`, `MatchLocationUI: showing N locations`, and `PanToCell: cell=...` on each click. Pressing pause while pinned logs `TogglePause blocked: a search result is pinned`.
+- [ ] **PL-15 Fail if:** the list shows cells outside the active asteroid or unexplored space, coordinates are cluster-global instead of world-local, the list refreshes on its own, the zoom changes on a row click, or the game can be unpaused while the overlay is open with a pinned result.
+
+---
+
 ## 7. Overlay and save lifecycle
 
 - [ ] **LC-1 Switching overlays:** switch to another overlay and back. Search text, dropdown, label, and highlights are cleared.
@@ -267,7 +287,8 @@ Each test uses the same pattern: **search → pick the row with the listed badge
   - the overlay legend title/description,
   - the kind badges,
   - the mass and count labels,
-  - the no-match / count text.
+  - the no-match / count text,
+  - the position list headers, area/cell/item rows and pager buttons.
 - [ ] **LOC-2** No raw `STRINGS.` keys, no `{0}` / `{1}` placeholders, no missing-glyph boxes, and no text clipped out of the dropdown or label.
 - [ ] **LOC-3** Counts still show the right number in each language (e.g. `Found: 3 critters` translated, with `3` present).
 
@@ -297,10 +318,15 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - Edible seeds (e.g. `Sleet Wheat Grain`) stay under **Food**; only non-food `PlantableSeed` prefabs are under **Seed**.
 - The general `Artifact` row exists even in games without artifacts; it simply highlights nothing.
 - Some DLC-gated rows (e.g. `Bionic Duplicant`) can appear in a save where that content is unavailable; they highlight nothing.
-- The overlay has no custom legend rows beyond its description.
+- The overlay legend keeps the vanilla colour rows; the search box, mass/count label, dropdown and position list are added above them.
 - The dropdown highlight starts on no row after every keystroke; the first `Up`/`Down` steps onto the first row, and both ends wrap. Hovering a row moves the same highlight, and it stays on that row after the pointer leaves.
 - With more rows than fit in the legend panel (at high caps — e.g. `e` returns the full `Maximum Search Results` of 50), the keyboard highlight can step below the visible area; the list does not auto-scroll to follow it yet.
 - While the search box has the keyboard (auto focus, or after clicking into it), letters and camera keys type into it instead of moving the view or firing shortcuts; the overlay button still closes the overlay, and closing hands the keyboard back.
+- The position list appears only for a **pinned dropdown result**, never for free text, and shows the **active world** only, revealed cells only.
+- Coordinates in the position list are **world-local**: `0, 0` is the bottom-left cell of the current asteroid, not of the cluster grid. A rocket interior therefore reports its own small coordinates.
+- The position list is a **snapshot** taken when the result is pinned; it is never refreshed while on screen, which is also why the colony is paused for as long as it is open.
+- The colony **stays paused** after the overlay closes. If it was already paused before the result was pinned, that earlier pause is part of the same count and still needs its one press to release.
+- Areas are **8-connected**: cells that only touch at a corner belong to the same area. An area row shows the centre of its bounding box, which need not be a matching cell itself.
 - Artifacts cannot be spawned with the sandbox Spawn tool.
 - Debug logging is off by default and is very verbose when on.
 

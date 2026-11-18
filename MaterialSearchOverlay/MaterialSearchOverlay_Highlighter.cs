@@ -3,6 +3,21 @@ using UnityEngine;
 
 namespace BobbyModding.MaterialSearchOverlay {
     /// <summary>
+    /// Where a highlighted entity came from. The position list uses this to explain a row
+    /// ("Copper Ore (debris)") without having to work out again what the highlighter decided.
+    /// </summary>
+    internal enum HighlightSource {
+        /// <summary>A creature, duplicant, plant, worn suit and anything else alive or built.</summary>
+        Entity,
+        /// <summary>A loose pickupable, i.e. debris, food, seeds, eggs, loose equipment.</summary>
+        Debris,
+        /// <summary>A completed building.</summary>
+        Building,
+        /// <summary>A building lit up because of what it holds, not for itself.</summary>
+        Container
+    }
+
+    /// <summary>
     /// A search term resolved into concrete match sets. Built either from the raw search
     /// text or from a single dropdown selection, then handed to
     /// <see cref="SearchHighlighter"/> which turns it into cells and entity targets.
@@ -166,6 +181,36 @@ namespace BobbyModding.MaterialSearchOverlay {
             new Dictionary<TargetKind, HashSet<GameObject>>();
 
         /// <summary>
+        /// The kind each highlighted object was matched as, and where it came from. Keyed by
+        /// GameObject for the same reason as <see cref="counted"/>: an entity is reachable
+        /// through several components but must appear once in the position list. Only the first
+        /// collector to claim an object writes here, matching the first-colour-wins rule in
+        /// <see cref="Add(TargetKind, KMonoBehaviour, List{KMonoBehaviour},
+        /// Dictionary{GameObject, Color}, bool, Color?, HighlightSource)"/>.
+        /// </summary>
+        private static readonly Dictionary<GameObject, TargetKind> targetKinds =
+            new Dictionary<GameObject, TargetKind>();
+
+        private static readonly Dictionary<GameObject, HighlightSource> targetSources =
+            new Dictionary<GameObject, HighlightSource>();
+
+        /// <summary>
+        /// What kind of thing a highlighted object is and where it was found. False when the
+        /// object is not in the current highlight set (already destroyed, or from a previous
+        /// search).
+        /// </summary>
+        internal static bool TryGetTargetInfo(GameObject go, out TargetKind kind,
+                out HighlightSource source) {
+            kind = TargetKind.Material;
+            source = HighlightSource.Entity;
+            if (go == null)
+                return false;
+            bool known = targetKinds.TryGetValue(go, out kind);
+            targetSources.TryGetValue(go, out source);
+            return known;
+        }
+
+        /// <summary>
         /// How many items of a kind were matched; zero when the kind did not match. Countable
         /// items are counted in units rather than objects, because the game merges identical
         /// ones into a single stack: a storage holding 299 Arbor Acorns is one or a few pile
@@ -260,6 +305,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             }
             targets.Clear();
             colors.Clear();
+            targetKinds.Clear();
+            targetSources.Clear();
             foreach (var set in counted.Values)
                 set.Clear();
         }
@@ -306,6 +353,18 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
+        /// Drops the metadata kept for an entity that no longer exists. The highlight set and
+        /// the counts already discard dead objects per frame; without this the kind and source
+        /// lookups would hold them until the next search.
+        /// </summary>
+        internal static void ForgetTarget(GameObject go) {
+            if (go == null)
+                return;
+            targetKinds.Remove(go);
+            targetSources.Remove(go);
+        }
+
+        /// <summary>
         /// Registers an entity, keyed by its GameObject so that two collectors reaching the
         /// same object through different components still produce one entry and one count.
         /// <para>
@@ -321,7 +380,8 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         private static void Add(TargetKind kind, KMonoBehaviour target,
                 List<KMonoBehaviour> targets, Dictionary<GameObject, Color> colors,
-                bool count = true, Color? swatch = null) {
+                bool count = true, Color? swatch = null,
+                HighlightSource source = HighlightSource.Entity) {
             if (target == null)
                 return;
             var go = target.gameObject;
@@ -334,6 +394,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                 }
                 set.Add(go);
             }
+            if (!targetKinds.ContainsKey(go))
+                targetKinds.Add(go, kind);
+            if (!targetSources.ContainsKey(go))
+                targetSources.Add(go, source);
             if (colors.ContainsKey(go))
                 return;
             // A kind only has one colour, so anything matched as a bare "Material" would come
@@ -348,13 +412,14 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         private static void TryAddPrefab(TargetKind kind, KMonoBehaviour candidate,
                 SearchMatches matches, List<KMonoBehaviour> targets,
-                Dictionary<GameObject, Color> colors) {
+                Dictionary<GameObject, Color> colors,
+                HighlightSource source = HighlightSource.Entity) {
             if (candidate == null || !IsRevealed(candidate))
                 return;
             var kPrefabID = candidate.GetComponent<KPrefabID>();
             if (kPrefabID == null || !matches.HasPrefab(kind, kPrefabID.PrefabTag))
                 return;
-            Add(kind, candidate, targets, colors);
+            Add(kind, candidate, targets, colors, source: source);
         }
 
         /// <summary>
@@ -363,7 +428,8 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         private static void TryAddMatchedPrefab(KMonoBehaviour candidate,
                 SearchMatches matches, List<KMonoBehaviour> targets,
-                Dictionary<GameObject, Color> colors) {
+                Dictionary<GameObject, Color> colors,
+                HighlightSource source = HighlightSource.Entity) {
             if (candidate == null || !IsRevealed(candidate))
                 return;
             var kPrefabID = candidate.GetComponent<KPrefabID>();
@@ -372,7 +438,7 @@ namespace BobbyModding.MaterialSearchOverlay {
             var kind = matches.PrefabKind(kPrefabID.PrefabTag);
             if (kind == null)
                 return;
-            Add(kind.Value, candidate, targets, colors);
+            Add(kind.Value, candidate, targets, colors, source: source);
         }
 
         /// <summary>
@@ -398,7 +464,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                 if (pe == null || !matches.Elements.Contains(pe.ElementID))
                     continue;
                 Add(TargetKind.Material, pickupables[i], targets, colors, count: false,
-                    swatch: MaterialSearchOverlay.ElementSwatchFor(pe.ElementID));
+                    swatch: MaterialSearchOverlay.ElementSwatchFor(pe.ElementID),
+                    source: HighlightSource.Debris);
             }
             var buildings = Components.BuildingCompletes.Items;
             for (int i = 0; i < buildings.Count; i++) {
@@ -406,7 +473,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                 if (pe == null || !matches.Elements.Contains(pe.ElementID))
                     continue;
                 Add(TargetKind.Material, buildings[i], targets, colors, count: false,
-                    swatch: MaterialSearchOverlay.ElementSwatchFor(pe.ElementID));
+                    swatch: MaterialSearchOverlay.ElementSwatchFor(pe.ElementID),
+                    source: HighlightSource.Building);
             }
         }
 
@@ -460,7 +528,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                 for (int j = 0; j < items.Count; j++) {
                     if (items[j] == null || !IsArtifactPrefab(items[j].GetComponent<KPrefabID>()))
                         continue;
-                    Add(TargetKind.Artifact, building, targets, colors);
+                    Add(TargetKind.Artifact, building, targets, colors,
+                        source: HighlightSource.Container);
                     break;
                 }
             }
@@ -495,7 +564,8 @@ namespace BobbyModding.MaterialSearchOverlay {
                     var kind = matches.PrefabKind(kPrefabID.PrefabTag);
                     if (kind == null && !matches.Boosters.Contains(kPrefabID.PrefabTag))
                         continue;
-                    Add(kind ?? TargetKind.Booster, building, targets, colors, count: false);
+                    Add(kind ?? TargetKind.Booster, building, targets, colors, count: false,
+                        source: HighlightSource.Container);
                     break;
                 }
             }
@@ -510,14 +580,16 @@ namespace BobbyModding.MaterialSearchOverlay {
                 List<KMonoBehaviour> targets, Dictionary<GameObject, Color> colors) {
             var items = Components.Pickupables.Items;
             for (int i = 0; i < items.Count; i++)
-                TryAddMatchedPrefab(items[i], matches, targets, colors);
+                TryAddMatchedPrefab(items[i], matches, targets, colors,
+                    HighlightSource.Debris);
         }
 
         private static void CollectBuildings(SearchMatches matches,
                 List<KMonoBehaviour> targets, Dictionary<GameObject, Color> colors) {
             var items = Components.BuildingCompletes.Items;
             for (int i = 0; i < items.Count; i++)
-                TryAddMatchedPrefab(items[i], matches, targets, colors);
+                TryAddMatchedPrefab(items[i], matches, targets, colors,
+                    HighlightSource.Building);
         }
 
         /// <summary>

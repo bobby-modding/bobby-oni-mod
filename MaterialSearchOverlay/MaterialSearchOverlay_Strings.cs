@@ -73,6 +73,65 @@ namespace BobbyModding.MaterialSearchOverlay {
                     public static LocString NO_MATCHES_LABEL = "No matches found";
 
                     /// <summary>
+                    /// The position list shown below the counts once a dropdown row is pinned.
+                    /// Every coordinate is world local: X and Y count cells from the bottom
+                    /// left corner of the active asteroid, so a distant rocket interior still
+                    /// reports small numbers. Areas are connected groups of matching cells;
+                    /// clicking any row moves the camera there without changing the zoom.
+                    /// <para>
+                    /// The list is a snapshot taken while the game is paused and is never
+                    /// refreshed, so the strings only have to describe what was found at that
+                    /// moment. Section headers count their own rows: areas or items for the
+                    /// flat sections, distinct display names for the grouped ones.
+                    /// </para>
+                    /// </summary>
+                    public static LocString LOCATION_TILE_HEADER = "Tile areas ({0})";
+                    public static LocString LOCATION_BACKWALL_HEADER = "Backwall areas ({0})";
+                    public static LocString LOCATION_DEBRIS_HEADER = "Debris ({0})";
+                    public static LocString LOCATION_BUILDING_HEADER = "Building ({0})";
+                    public static LocString LOCATION_CONTENTS_HEADER = "Contents ({0})";
+                    public static LocString LOCATION_ENTITIES_HEADER = "Entities ({0})";
+
+                    /// <summary>An area row: its world-local bounding box.</summary>
+                    public static LocString LOCATION_AREA_BOUNDS = "X {0}-{1}, Y {2}-{3}";
+
+                    /// <summary>A group row, e.g. "Mesh Tile (12)".</summary>
+                    public static LocString LOCATION_GROUP_ROW = "{0} ({1})";
+
+                    /// <summary>An instance row: where the matched object stands.</summary>
+                    public static LocString LOCATION_ITEM_ROW = "X {0} Y {1}";
+
+                    /// <summary>
+                    /// A selected / total pair in one of the two value columns, e.g.
+                    /// "1,000 kg / 5,400 kg" for mass or "240 / 402" for tiles and items.
+                    /// </summary>
+                    public static LocString LOCATION_PAIR = "{0} / {1}";
+
+                    /// <summary>The count column of a single matched object row.</summary>
+                    public static LocString LOCATION_ITEM_ONE = "1 item";
+
+                    /// <summary>The count column of a single tile inside an expanded area.</summary>
+                    public static LocString LOCATION_TILE_SINGLE = "1 tile";
+
+                    /// <summary>One tile of an expanded area: its X and Y.</summary>
+                    public static LocString LOCATION_CELL_ROW = "X {0} Y {1}";
+
+                    /// <summary>
+                    /// The scroll position on a section header. 100% is the top and also what
+                    /// a section that fits in its pane reports, since there is nothing to
+                    /// scroll there.
+                    /// </summary>
+                    public static LocString LOCATION_SCROLL_PERCENT = "{0}%";
+
+                    /// <summary>
+                    /// Last row of a list that hit the build cap, so a huge vein never looks
+                    /// complete when it is not. {0} is how many entries are not shown.
+                    /// </summary>
+                    public static LocString LOCATION_TRUNCATED = "… and {0} more";
+
+                    public static LocString LOCATION_EMPTY = "Nothing found in this world";
+
+                    /// <summary>
                     /// One label per searchable kind, shown as a badge on dropdown rows so a
                     /// name that matches several kinds ("Fish" as food and as creature) can be
                     /// told apart. {0} is the count for that kind.

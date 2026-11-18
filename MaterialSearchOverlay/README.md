@@ -14,6 +14,8 @@ An Oxygen Not Included mod that lets you search the colony by name and highlight
 - **Visual highlight** — matching entities light up in place; for elements, matching tiles, natural backwalls, buildings, and debris are colored in the element's natural color and everything else is dimmed to a flat grey, so the overlay opens on a grey map and only the matches pick up color
 - **Mass totals** — selecting an element reports its total mass broken down by natural tiles, visible natural backwalls, debris, and buildings
 - **Count summary** — for everything else the label reports how many of each kind were found in the colony, counting stacked items by their units (299 stored Arbor Acorns read as `299 seeds`, not as the one or few piles they occupy); food instead reports its combined mass and calories (e.g. `20 kg (80,000 kcal)`), or mass only when calorie data is unavailable
+- **Position list** — selecting a dropdown result also lists where the matches are, in world coordinates: X and Y count cells from the bottom-left corner of the current asteroid. Tile and backwall matches are grouped into connected areas; `+` expands an area into its individual cells (100 per page), and long item lists are paged the same way. Clicking any row moves the camera there without changing the zoom level. The list covers only explored space in the active asteroid
+- **Pinned simulation** — selecting a result pauses the colony and refuses to unpause until the overlay is closed, via the pause key, the pause button, or the play button alike. That is what makes the position list trustworthy: tracked critters and duplicants cannot move, and items cannot be created or destroyed, while you read it. The game stays paused after the overlay closes, so you can look around; one press of the pause key then resumes
 - **Filtered hover tooltip** — while the overlay is active, hovering a cell lists only what the search matched; the cell's own element block appears only when that element matched too, so searching `hatch egg` does not also explain the oxygen the egg is sitting in
 - **Search-aware clicking** — clicking a cell picks the matching thing straight away instead of cycling through everything else in it, and clicking again walks through the other matches; a cell with no match selects nothing until the search is cleared
 - **Tracked highlights** — matched entities are found once when you search, then stay lit up as they walk around; anything created afterwards is picked up by running the search again
@@ -59,10 +61,13 @@ Subscribe on the Steam Workshop.
 2. Type any part of a name into the search field — with auto focus on, the field already has the keyboard when the overlay opens, so typing can start right away; while it has the keyboard, typing letters into it takes over from the camera keys, and closing the overlay hands the keyboard back
 3. Matching results appear in the dropdown, each labelled with its kind — click one to pin it, or step through them with `Up`/`Down` and press `Enter`
 4. The map is dimmed grey from the moment the overlay opens; every match then lights up in its own colour on top of that grey, so only the matches show colour
-5. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
-6. Click a cell to select the match directly; click again to step through the other matches in that cell
+5. A pinned result pauses the colony and fills in the position list below the counts. Tile and backwall matches are grouped into connected areas; press `+` to expand an area into its cells, and `Previous`/`Next` to page. Click any row to move the camera to that spot — the zoom stays where it was
+6. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
+7. Click a cell to select the match directly; click again to step through the other matches in that cell
 
-Closing the overlay clears the search field, so every time you open it the box is empty again.
+Closing the overlay clears the search field and empties the position list, so every time you open it the box is empty again. The colony stays paused after closing; press the pause key once to resume. Starting a new search, or clicking back into the search box, hides the list until the next result is pinned.
+
+The position list is a snapshot: it is taken while the colony is paused and never refreshed while it is on screen, so the coordinates do not drift under you.
 
 ## Mod options
 

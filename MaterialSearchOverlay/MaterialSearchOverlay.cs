@@ -57,6 +57,12 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         private static SimHashes[] backwallMatches;
 
+        /// <summary>
+        /// The current per cell backwall match snapshot, for readers that need to turn it into
+        /// positions. Null before the first scan.
+        /// </summary>
+        internal static SimHashes[] BackwallSnapshot => backwallMatches;
+
         private static readonly Dictionary<SimHashes, float> BackwallMasses =
             new Dictionary<SimHashes, float>();
 
@@ -64,6 +70,12 @@ namespace BobbyModding.MaterialSearchOverlay {
             new Dictionary<GameObject, Color>();
 
         private readonly List<KMonoBehaviour> layerTargets = new List<KMonoBehaviour>();
+
+        /// <summary>
+        /// The entities the current search lit up, in the order the highlighter found them.
+        /// The position list turns these into rows; it only reads the set, never changes it.
+        /// </summary>
+        internal List<KMonoBehaviour> Targets => layerTargets;
 
         /// <summary>
         /// Scratch set handed to the game's per-frame highlight pass. Since U60 that helper
@@ -97,9 +109,11 @@ namespace BobbyModding.MaterialSearchOverlay {
             // rather than trusting to be handed back the exact instance that matched.
             highlightConditions = new OverlayModes.ColorHighlightCondition[] {
                 new OverlayModes.ColorHighlightCondition(
-                    kmb => kmb != null && targetColors.TryGetValue(kmb.gameObject, out var color)
-                        ? color : Color.clear,
-                    kmb => kmb != null && targetColors.ContainsKey(kmb.gameObject))
+                    kmb => kmb != null && !LocationSelection.IsTargetHidden(kmb.gameObject) &&
+                        targetColors.TryGetValue(kmb.gameObject, out var color) ? color :
+                        Color.clear,
+                    kmb => kmb != null && !LocationSelection.IsTargetHidden(kmb.gameObject) &&
+                        targetColors.ContainsKey(kmb.gameObject))
             };
             Instance = this;
             Log.Debug("MaterialSearchOverlay: instance created ID={0}".F(ID));
@@ -117,7 +131,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (element == null)
                 return NON_MATCHING_COLOR;
             if (matches.Elements.Contains(element.id) &&
-                    ElementColors.TryGetValue(element.id, out var color))
+                    ElementColors.TryGetValue(element.id, out var color) &&
+                    LocationSelection.IsTileVisible(cell))
                 return color;
             return GetBackwallColor(cell);
         }
@@ -132,7 +147,7 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (match == null || (uint)cell >= (uint)match.Length)
                 return NON_MATCHING_COLOR;
             var id = match[cell];
-            if (id == default)
+            if (id == default || !LocationSelection.IsBackwallVisible(cell))
                 return NON_MATCHING_COLOR;
             return ElementColors.TryGetValue(id, out var color) ? color :
                 NON_MATCHING_COLOR;
@@ -156,6 +171,16 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (!HoverFilterActive || selectable == null)
                 return true;
             return targetColors.ContainsKey(selectable.gameObject);
+        }
+
+        /// <summary>
+        /// The colour the overlay paints one highlighted entity in. The position list uses it
+        /// for its row swatch, so a row and the thing it points at on the map always agree.
+        /// False when the object is not in the current highlight set.
+        /// </summary>
+        internal bool TryGetTargetColor(GameObject go, out Color color) {
+            color = Color.white;
+            return go != null && targetColors.TryGetValue(go, out color);
         }
 
         /// <summary>
@@ -201,9 +226,10 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         /// <remarks>
         /// A cell counts as visible natural backwall when it belongs to the active world, has
-        /// been revealed, is not covered by a solid tile, and the sim reports a solid backwall
-        /// whose element is in the match set. This mirrors the vanilla check used by the dig
-        /// tool (WorldDamage.GetApproximateDigTime). Must run on the main thread:
+        /// been revealed, and the sim reports a solid backwall whose element is in the match
+        /// set. A solid tile in front of it does not disqualify the cell: the game still shows
+        /// that backwall, and the overlay paints over the tile anyway, so the player can plan
+        /// where to dig rather than only after digging. Must run on the main thread:
         /// BackwallManager points into native sim memory that is nulled out during world loads.
         /// </remarks>
         internal static void RefreshBackwallData(HashSet<SimHashes> matchingElements) {
@@ -218,9 +244,6 @@ namespace BobbyModding.MaterialSearchOverlay {
                 if (!Grid.IsActiveWorld(cell))
                     continue;
                 if (Grid.Visible[cell] <= 20)
-                    continue;
-                // A solid tile covers the backwall behind it, so it is not visible
-                if (Grid.Solid[cell])
                     continue;
                 if (!BackwallManager.HasBackwall(cell))
                     continue;
@@ -261,6 +284,13 @@ namespace BobbyModding.MaterialSearchOverlay {
             // null, which makes the game's DLC filter reject every prefab. First open of the
             // overlay is the earliest point they can be read.
             SearchIndex.EnsureWorldBuilt();
+            // A fresh open starts with no pinned result: any pause left over from a previous
+            // session must not keep refusing unpause until the player picks something again.
+            ForcedPause.Reset();
+            MatchLocationUI.Hide();
+            // A direction key latched in an earlier session would keep the camera sliding
+            // under the list until the next key press, so start from a clean pan state.
+            CameraPan.ReleaseHeldKeys();
             if (Patches.SearchField != null) {
                 Patches.SearchField.SetActive(true);
                 Log.Debug("Enable: SearchField set active");
@@ -277,12 +307,20 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (SelectTool.Instance != null)
                 SelectTool.Instance.ClearLayerMask();
             if (Patches.SearchField != null) {
+                // Give the keyboard back before hiding the box: a field that is merely
+                // deactivated can stay as the EventSystem's selection, and the camera would
+                // then treat every movement key as "typing" for the rest of the session.
+                Patches.DeselectSearchField();
                 Patches.SearchField.SetActive(false);
                 // The query has just been dropped from the match set, so the box must not
                 // keep showing it: an auto-focused reopen would otherwise list rows for a
                 // search that is no longer lit up on the map.
                 Patches.ClearSearchField();
             }
+            // The per frame release stops once the box loses focus, so a key that was still
+            // held when the overlay closes has to be let go here: otherwise the camera keeps
+            // panning after the map is back and the overlay is gone.
+            CameraPan.ReleaseHeldKeys();
             if (Patches.DropdownContainer != null) {
                 Patches.DropdownContainer.SetActive(false);
                 Log.Debug("Disable: DropdownContainer set inactive");
@@ -295,6 +333,11 @@ namespace BobbyModding.MaterialSearchOverlay {
             SelectedEntry = null;
             SearchText = null;
             RefreshBackwallData(null);
+            // The list is a snapshot of a pinned selection, so it goes with the selection. The
+            // pause it caused stays behind on purpose: the player can look around after closing
+            // and resume with the normal pause key.
+            MatchLocationUI.Hide();
+            ForcedPause.End();
             base.Disable();
             Log.Debug("Disable: complete");
         }
@@ -323,6 +366,9 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// afterwards needs a new search or selection to appear.
         /// </summary>
         internal void RefreshHighlights() {
+            // Whatever list is on screen belongs to the previous selection; a new query
+            // invalidates it even before the new results are known.
+            MatchLocationUI.Hide();
             Matches = SelectedEntry != null ?
                 SearchMatches.FromSelection(SelectedEntry) :
                 SearchMatches.FromQuery(SearchText);
@@ -355,12 +401,19 @@ namespace BobbyModding.MaterialSearchOverlay {
             foreach (var go in colors.Keys)
                 if (!ReferenceEquals(go, null) && go == null)
                     deadColorKeys.Add(go);
-            for (int i = 0; i < deadColorKeys.Count; i++)
-                colors.Remove(deadColorKeys[i]);
+            for (int i = 0; i < deadColorKeys.Count; i++) {
+                var key = deadColorKeys[i];
+                SearchHighlighter.ForgetTarget(key);
+                colors.Remove(key);
+            }
         }
 
         public override void Update() {
             base.Update();
+            // Runs before the entity upkeep below, which is skipped while the search is empty:
+            // the pause has to be held for as long as the overlay is open, not only while
+            // there are highlights to draw.
+            ForcedPause.Guard();
             if (Matches == null || Matches.IsEmpty)
                 return;
             if (layerTargets.Count == 0)
@@ -369,9 +422,14 @@ namespace BobbyModding.MaterialSearchOverlay {
             Grid.GetVisibleExtents(out var min, out var max);
             frameTargets.Clear();
             frameTargets.Add(layerTargets);
+            // Conditional, not Constant: an entity the position list has unticked is still a
+            // target here so it can be ticked again without a rescan, but it must go back to
+            // the normal layer. Objects on the highlight layer are drawn in their own colours
+            // by the overlay view, so leaving an unticked one there made it show its real
+            // colour instead of the grey everything unhighlighted gets.
             RemoveOffscreenAndUpdateHighlights(min, max, frameTargets,
                 highlightConditions,
-                OverlayModes.BringToFrontLayerSetting.Constant, targetLayer);
+                OverlayModes.BringToFrontLayerSetting.Conditional, targetLayer);
         }
 
         public override List<LegendEntry> GetCustomLegendData() {

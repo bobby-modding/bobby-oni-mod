@@ -66,6 +66,23 @@ Paths below are shortened: `...` means
 | `...OVERLAYS.MATERIALSEARCH.TYPES.ARTIFACT` | Artifact | Type badge on a dropdown row |
 | `...OVERLAYS.MATERIALSEARCH.TOOLTIPS.MATCH` | Material matches the search term | Element tooltip when highlighted |
 | `...OVERLAYS.MATERIALSEARCH.TOOLTIPS.NO_MATCH` | Material does not match the search term | Element tooltip when dimmed |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_TILE_HEADER` | Tile areas ({0}) | Position list section title; `{0}` is the number of connected areas |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_BACKWALL_HEADER` | Backwall areas ({0}) | Position list section title; `{0}` is the number of connected areas |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_ITEMS_HEADER` | Items ({0}) | Position list section title; `{0}` is the number of items |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_AREA_ROW` | {0}, {1}  ({2} cells) | One area row: X, Y of its centre and its cell count |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_CELL_ROW` | {0}, {1} | One expanded cell: its X, Y |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_ITEM_ROW` | {0} at {1}, {2} | An item row without a source word: name, X, Y |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_ITEM_ROW_SOURCE` | {0} ({1}) at {2}, {3} | An item row with a source word: name, source, X, Y |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_SOURCE_DEBRIS` | debris | Source word for a loose item |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_SOURCE_BUILDING` | building | Source word for a completed building |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_SOURCE_CONTAINER` | contents | Source word for a container holding a match |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_SOURCE_ENTITY` | entity | Fallback source word |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_PAGE` | Page {0} of {1} | Pager caption between the two buttons |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_PREV_PAGE` | Previous | Pager button |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_NEXT_PAGE` | Next | Pager button |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_EXPAND` | + | Expands an area into its cells |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_COLLAPSE` | - | Collapses an expanded area |
+| `...OVERLAYS.MATERIALSEARCH.LOCATION_EMPTY` | Nothing found in this world | Shown when no position is in the active world |
 
 ### Notes for translators
 
@@ -83,6 +100,10 @@ Paths below are shortened: `...` means
   to English.
 - An empty `msgstr` also falls back to English, so you can translate a subset and leave
   the rest blank while you work through them.
+- `LOCATION_*` strings describe the position list. Coordinates are **world-local**: X and Y
+  count cells from the bottom-left corner of the current asteroid, so the numbers are short
+  and are not translated. The `+` and `-` expand/collapse markers are literal characters and
+  should stay as they are.
 
 ## Existing translations
 

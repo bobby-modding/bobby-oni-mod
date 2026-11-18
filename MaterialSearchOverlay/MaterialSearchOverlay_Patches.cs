@@ -60,13 +60,20 @@ namespace BobbyModding.MaterialSearchOverlay {
             ShowTypeBadges = options.ShowTypeBadges;
             SearchIndex.MaxResults = options.MaxSearchResults;
             AutoFocusSearch = options.AutoFocusSearch;
-            Log.Debug("ApplyOptions: debug={0} badges={1} maxResults={2} autoFocus={3}".F(
-                Log.DebugEnabled, ShowTypeBadges, SearchIndex.MaxResults, AutoFocusSearch));
+            MatchLocationUI.SetVisibleRows(options.MaxLocationRows);
+            Log.Debug("ApplyOptions: debug={0} badges={1} maxResults={2} autoFocus={3} locationRows={4}".F(
+                Log.DebugEnabled, ShowTypeBadges, SearchIndex.MaxResults, AutoFocusSearch,
+                options.MaxLocationRows));
         }
 
         /// <summary>Empties the search box, if the legend has built one yet.</summary>
         internal static void ClearSearchField() {
             OverlayLegend_OnSpawn_Patch.ClearSearchField();
+        }
+
+        /// <summary>Releases the keyboard when the search box is about to be hidden.</summary>
+        internal static void DeselectSearchField() {
+            OverlayLegend_OnSpawn_Patch.DeselectSearchField();
         }
 
         private static readonly Type OVERLAY_TYPE = typeof(OverlayMenu).GetNestedType(
@@ -345,6 +352,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                         });
                         input.onSelect.AddListener(_ => {
                             Log.Debug("onSelect: input.text='{0}'".F(input.text));
+                            // Clicking back into the box means the player is searching again;
+                            // positions from the pinned result no longer describe what is
+                            // about to be looked at.
+                            MatchLocationUI.Hide();
                             if (!string.IsNullOrEmpty(input.text))
                                 PopulateDropdown(input.text);
                         });
@@ -399,6 +410,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                 sgo.SetActive(false);
                 Patches.DropdownContainer = sgo;
                 Log.Debug("Postfix: DropdownContainer built, active={0}".F(sgo.activeInHierarchy));
+                // Built after the search box so it sits below it in the legend, and left hidden
+                // until a result is pinned.
+                MatchLocationUI.Init(__instance);
             }
 
             /// <summary>
@@ -429,6 +443,24 @@ namespace BobbyModding.MaterialSearchOverlay {
                 var input = SearchInput;
                 if (input != null && !string.IsNullOrEmpty(input.text))
                     input.SetTextWithoutNotify("");
+            }
+
+            /// <summary>
+            /// Hands the keyboard back to the game when the overlay closes. Hiding the box is
+            /// not enough on its own: an input field can stay as the EventSystem's current
+            /// selection after its GameObject goes inactive, and the camera treats a selected
+            /// input field as "the player is typing", which would swallow every movement key
+            /// from then on.
+            /// </summary>
+            internal static void DeselectSearchField() {
+                var input = SearchInput;
+                var current = UnityEngine.EventSystems.EventSystem.current;
+                if (input == null || current == null)
+                    return;
+                if (current.currentSelectedGameObject == input.gameObject) {
+                    input.DeactivateInputField();
+                    current.SetSelectedGameObject(null);
+                }
             }
 
             private static void PopulateDropdown(string text) {
@@ -685,8 +717,13 @@ namespace BobbyModding.MaterialSearchOverlay {
                     entry?.DisplayName ?? "null"));
                 suppressDropdown = true;
                 if (MaterialSearchOverlay.Instance != null) {
+                    // Freeze the colony before the positions are read, so the snapshot the
+                    // list shows is what the player will find when they click a row.
+                    ForcedPause.Begin();
                     MaterialSearchOverlay.Instance.SelectEntry(entry);
                     ShowResultLabel();
+                    var overlay = MaterialSearchOverlay.Instance;
+                    MatchLocationUI.Show(MatchLocationCollector.Build(overlay.Matches, entry));
                     Log.Debug("OnResultSelected: calling ForceOverlayUpdate");
                     Game.Instance.ForceOverlayUpdate();
                     Log.Debug("OnResultSelected: ForceOverlayUpdate returned");
@@ -1149,18 +1186,114 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
-        /// Feeds the arrow keys to the search dropdown. This sits on TMP's own per frame
-        /// selected-object update rather than on its key handling because that handler returns
-        /// the protected nested <c>EditState</c>, which a prefix in this assembly cannot
-        /// declare, so the press cannot be swallowed before TMP sees it. A postfix needs
-        /// nothing swallowed: the arrow keys are unbound in the base game, the update runs only
-        /// while the field is focused, and it runs after TMP has moved the caret - which is
-        /// exactly where the caret has to be put back.
+        /// Feeds the arrow keys to the search dropdown and releases the camera's held
+        /// direction keys. This sits on TMP's own per frame selected-object update rather than
+        /// on its key handling because that handler returns the protected nested
+        /// <c>EditState</c>, which a prefix in this assembly cannot declare, so the press
+        /// cannot be swallowed before TMP sees it. A postfix needs nothing swallowed: the
+        /// arrow keys are unbound in the base game, the update runs only while the field is
+        /// focused, and it runs after TMP has moved the caret - which is exactly where the
+        /// caret has to be put back.
+        /// <para>
+        /// The prefix handles the camera: the game only clears the pan flags in its key up
+        /// handler, which a focused text box suppresses, so a direction pressed just before
+        /// clicking into the box would latch and the camera would keep sliding while the
+        /// player types and still be sliding after the overlay closes. Runs for every TMP
+        /// field, not only this mod's search box, because the latch is the game's and any
+        /// mod-built field can trigger it.
+        /// </para>
         /// </summary>
         [HarmonyPatch(typeof(TMP_InputField), "OnUpdateSelected")]
         public static class TMPInputField_OnUpdateSelected_Patch {
+            internal static void Prefix(TMP_InputField __instance) {
+                if (__instance != null && __instance.isFocused)
+                    CameraPan.ReleaseHeldKeys();
+            }
+
             internal static void Postfix(TMP_InputField __instance) {
                 OverlayLegend_OnSpawn_Patch.HandleNavigationKey(__instance);
+            }
+        }
+
+        /// <summary>
+        /// Makes a plain <see cref="TMP_InputField"/> count as "the player is typing" for the
+        /// camera. The game only recognises its own <c>KInputTextField</c> and the legacy UI
+        /// input field, but PLib - and this mod's search box - adds a bare TMP field, so the
+        /// camera would otherwise keep panning on movement keys pressed while typing and, worse,
+        /// miss the key up that should stop it. Treating any focused field as text entry stops
+        /// both at the source; the per frame release above cleans up a key that was already
+        /// down when the field took focus.
+        /// </summary>
+        [HarmonyPatch(typeof(CameraController), "WithinInputField")]
+        public static class CameraController_WithinInputField_Patch {
+            internal static bool Prefix(ref bool __result) {
+                var current = UnityEngine.EventSystems.EventSystem.current;
+                if (current == null)
+                    return true;
+                var selected = current.currentSelectedGameObject;
+                // Deactivating a field does not necessarily clear the EventSystem's selection,
+                // so a hidden box must not keep the camera locked out of its keys.
+                if (selected == null || !selected.activeInHierarchy)
+                    return true;
+                // Selection alone is not enough: a field can stay selected without the caret
+                // being in it, and the movement keys must keep working then.
+                var field = selected.GetComponent<TMP_InputField>();
+                if (field == null || !field.isFocused)
+                    return true;
+                __result = true;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Refuses to unpause while a pinned result is on screen. The pause key, the pause
+        /// button and the play button all funnel through <c>TogglePause</c>, so one prefix
+        /// covers every way the player has of starting the simulation. The original is not
+        /// called at all, which matters: the pause count has to stay exactly one, because a
+        /// count of two would need two presses to resume once the overlay closes.
+        /// </summary>
+        [HarmonyPatch(typeof(SpeedControlScreen), "TogglePause", typeof(bool))]
+        public static class SpeedControlScreen_TogglePause_Patch {
+            internal static bool Prefix(KToggle ___pauseButton) {
+                if (!ForcedPause.BlocksUnpause)
+                    return true;
+                // A KToggle flips its own isOn before firing onClick, so clicking the pause
+                // button has already made it look unpaused by the time this runs. Put the
+                // visual state back; the pause itself was never released.
+                if (___pauseButton != null && !___pauseButton.isOn)
+                    ___pauseButton.isOn = true;
+                Log.Debug("TogglePause blocked: a search result is pinned");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Refuses every direct unpause as well. Several systems - the cinema camera, screens
+        /// closing, other mods - release the pause without going through
+        /// <c>TogglePause</c>, and the per frame guard would only undo those a frame later.
+        /// Blocking here keeps the pause count at exactly one, so the player still needs a
+        /// single press to resume after the overlay closes.
+        /// </summary>
+        [HarmonyPatch(typeof(SpeedControlScreen), "Unpause", typeof(bool))]
+        public static class SpeedControlScreen_Unpause_Patch {
+            internal static bool Prefix() {
+                if (!ForcedPause.BlocksUnpause)
+                    return true;
+                Log.Debug("Unpause blocked: a search result is pinned");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Drops the pause guard when the speed screen itself is torn down (load, quit to menu).
+        /// The pause count belongs to the world that is going away and must not be carried into
+        /// the next one.
+        /// </summary>
+        [HarmonyPatch(typeof(SpeedControlScreen), "OnForcedCleanUp")]
+        public static class SpeedControlScreen_OnForcedCleanUp_Patch {
+            internal static void Postfix() {
+                ForcedPause.Reset();
+                MatchLocationUI.Hide();
             }
         }
     }
