@@ -184,26 +184,75 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
-        /// Whether the per cell element block belongs in the tooltip, asked by the game through
-        /// the hover card's overlay filter map. Only when the cell's own element matched, so
-        /// searching for a creature does not also explain the oxygen it is sitting in. A
-        /// matching natural backwall counts as well, because the cell block is where the game
-        /// labels it. Main thread only: it reads the live mouse cell.
+        /// The cell the mouse is over right now, or -1 when it cannot be resolved (no camera,
+        /// cursor outside the grid). Main thread only: it reads the live mouse position.
+        /// </summary>
+        internal static int HoveredCell() {
+            var camera = Camera.main;
+            if (camera == null)
+                return -1;
+            int cell = Grid.PosToCell(camera.ScreenToWorldPoint(KInputManager.GetMousePos()));
+            return Grid.IsValidCell(cell) ? cell : -1;
+        }
+
+        /// <summary>
+        /// Whether the natural element of a cell matched the pinned search, the rule for the
+        /// game's own tile proxy: it follows only what it stands for, so a matching tile no
+        /// longer makes the backwall behind it clickable as well. An unreadable cell keeps the
+        /// proxy - the rule must not hide what it cannot read.
+        /// </summary>
+        internal static bool TileMatchedAtCell(int cell) {
+            if (cell < 0)
+                return true;
+            var matches = Instance?.Matches;
+            if (matches == null)
+                return true;
+            var element = Grid.Element[cell];
+            return element != null && matches.Elements.Contains(element.id);
+        }
+
+        /// <summary>
+        /// Whether the cell's natural backwall matched the pinned search, the rule for the
+        /// game's own backwall proxy. Unlike the tile rule this one gives up on an unreadable
+        /// cell: there is no backwall to select there, so nothing argues for keeping it.
+        /// </summary>
+        internal static bool BackwallMatchedAtCell(int cell) {
+            return HasMatchingBackwall(cell);
+        }
+
+        /// <summary>
+        /// Whether the cell's element half is switched on for the tooltip: the natural element
+        /// matched the search and its row in the position list is still checked. A null mask
+        /// means the search was never trimmed by the list, so a match stands on its own.
+        /// </summary>
+        internal static bool TileSelectedAtCell(int cell) {
+            return TileMatchedAtCell(cell) && LocationSelection.IsTileVisible(cell);
+        }
+
+        /// <summary>
+        /// Whether the cell's natural backwall half is switched on for the tooltip: the backwall
+        /// matched and its row in the position list is still checked.
+        /// </summary>
+        internal static bool BackwallSelectedAtCell(int cell) {
+            return BackwallMatchedAtCell(cell) && LocationSelection.IsBackwallVisible(cell);
+        }
+
+        /// <summary>
+        /// Whether the per cell element block belongs in the tooltip at all, asked by the game
+        /// through the hover card's overlay filter map. Only when one of the cell's two halves
+        /// is switched on for the tooltip: the tile rule is <see cref="TileSelectedAtCell"/> and
+        /// the backwall rule is <see cref="BackwallSelectedAtCell"/>, so searching for a
+        /// creature no longer explains the cell it is sitting in, and unchecking a half in the
+        /// position list hides it from the tooltip as well as from the map. Inside the block the
+        /// two halves then each get their own hiding, by the drawer patches. Main thread only:
+        /// it reads the live mouse cell.
         /// </summary>
         internal static bool ShouldShowHoverCell() {
             var overlay = Instance;
             if (overlay == null || !overlay.HoverFilterActive)
                 return true;
-            var camera = Camera.main;
-            if (camera == null)
-                return true;
-            int cell = Grid.PosToCell(camera.ScreenToWorldPoint(KInputManager.GetMousePos()));
-            if (!Grid.IsValidCell(cell))
-                return true;
-            var element = Grid.Element[cell];
-            if (element != null && overlay.Matches.Elements.Contains(element.id))
-                return true;
-            return HasMatchingBackwall(cell);
+            int cell = HoveredCell();
+            return TileSelectedAtCell(cell) || BackwallSelectedAtCell(cell);
         }
 
         /// <summary>True when the natural backwall at this cell matched the current search.</summary>
@@ -333,6 +382,10 @@ namespace BobbyModding.MaterialSearchOverlay {
             SelectedEntry = null;
             SearchText = null;
             RefreshBackwallData(null);
+            // A row click may have left the game selecting one of our targets and its
+            // info panel open; switching the overlay off closes that panel, while a
+            // selection the player made themselves is left alone.
+            MatchLocationCollector.CloseInfoPanel();
             // The list is a snapshot of a pinned selection, so it goes with the selection. The
             // pause it caused stays behind on purpose: the player can look around after closing
             // and resume with the normal pause key.

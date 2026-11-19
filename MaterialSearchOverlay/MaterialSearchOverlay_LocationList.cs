@@ -551,7 +551,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                 AddValueColumn(cellRow, false, ROW_HEIGHT, DIM_COLOR,
                     () => (string) MSearch.LOCATION_TILE_SINGLE);
                 AddTailSpacer(cellRow, ROW_HEIGHT);
-                AddClick(cellRow, cell);
+                AddClickCellPanel(cellRow, cell, location.Source);
                 added++;
             }
             if (cells.Length > shown && added < MAX_SECTION_ROWS) {
@@ -592,7 +592,7 @@ namespace BobbyModding.MaterialSearchOverlay {
             AddValueColumn(row, false, ROW_HEIGHT, LABEL_COLOR,
                 () => (string) MSearch.LOCATION_ITEM_ONE);
             AddTailSpacer(row, ROW_HEIGHT);
-            AddClick(row, location.Cell);
+            AddClickItemPanel(row, location.Cell, location.Target);
         }
 
         /// <summary>A note that rows were left out, aligned with the rows it follows.</summary>
@@ -1324,6 +1324,39 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (handler == null)
                 handler = row.AddComponent<LocationRowEvents>();
             handler.OnClick = () => MatchLocationCollector.PanToCell(cell);
+        }
+
+        /// <summary>
+        /// A row standing for exactly one cell: the click pans and also makes the game select
+        /// that cell, which opens the game's own panel for it and lets its actions work on
+        /// the real cell. A row standing for an area or a group has no one thing to select,
+        /// so those only pan.
+        /// <param name="source">Whether the cell is a tile or a natural backwall, which picks
+        /// the kind of cell proxy the game selects through.</param>
+        /// </summary>
+        private static void AddClickCellPanel(GameObject row, int cell, MatchLocationSource source) {
+            var handler = row.GetComponent<LocationRowEvents>();
+            if (handler == null)
+                handler = row.AddComponent<LocationRowEvents>();
+            handler.OnClick = () => {
+                MatchLocationCollector.PanToCell(cell);
+                MatchLocationCollector.OpenCellPanel(cell, source);
+            };
+        }
+
+        /// <summary>
+        /// A row standing for exactly one object: the click pans and selects that object, so
+        /// the game opens its own panel for it. A storage building's panel is its own, which
+        /// lists what is inside it - what the row was built from.
+        /// </summary>
+        private static void AddClickItemPanel(GameObject row, int cell, GameObject target) {
+            var handler = row.GetComponent<LocationRowEvents>();
+            if (handler == null)
+                handler = row.AddComponent<LocationRowEvents>();
+            handler.OnClick = () => {
+                MatchLocationCollector.PanToCell(cell);
+                MatchLocationCollector.OpenItemPanel(target);
+            };
         }
 
         private static void AddButtonClick(GameObject obj, System.Action onClick) {

@@ -515,5 +515,93 @@ namespace BobbyModding.MaterialSearchOverlay {
             ForcedPause.Guard();
             Log.Debug("PanToCell: cell={0}".F(cell));
         }
+
+        // ── The game's own info panel ──────────────────────────────────────────────────────────────────
+        // A row that stands for exactly one thing - one cell, one item - can be clicked
+        // to make the game really select it: the same selection the player gets by
+        // clicking that thing with the mouse, so the panel the game opens is the real
+        // one, and its actions work on the real thing. Cells are selected through the
+        // game's own cell proxies, which report the cell they stand on: a proxy has to
+        // be parked on the cell before it is selected, because selecting it is what
+        // makes it keep that spot instead of following the mouse.
+        internal static GameObject panelTarget;
+
+        internal static void OpenCellPanel(int cell, MatchLocationSource source) {
+            if (!Grid.IsValidCell(cell) || SelectTool.Instance == null)
+                return;
+            var proxy = source == MatchLocationSource.Backwall ?
+                BackwallSelectionObject.Instance?.gameObject : FindTileProxy();
+            if (proxy == null)
+                return;
+            var sel = proxy.GetComponent<KSelectable>();
+            if (sel == null)
+                return;
+            // Park it on the cell before selecting it: the proxy reads the cell out of
+            // its own position, and the selection message makes it adopt that spot.
+            var centre = Grid.CellToPosCCC(cell, Grid.SceneLayer.Move);
+            var transform = proxy.transform;
+            transform.position = new Vector3(centre.x, centre.y, transform.position.z);
+            var current = SelectTool.Instance.selected;
+            // Asking for the selection that is already in place changes nothing, so
+            // that one is refreshed by hand instead: the panel is already open for it.
+            if (current != sel)
+                SelectTool.Instance.Select(sel, skipSound: true);
+            if (SelectTool.Instance.selected != sel)
+                return;
+            panelTarget = proxy;
+            if (current == sel && DetailsScreen.Instance != null)
+                DetailsScreen.Instance.Refresh(proxy);
+            Log.Debug("OpenCellPanel: cell={0} backwall={1}".F(cell,
+                source == MatchLocationSource.Backwall));
+        }
+
+        internal static void OpenItemPanel(GameObject target) {
+            if (target == null || SelectTool.Instance == null)
+                return;
+            // A destroyed object has no components left on it, which is what the null
+            // selectability reports: the row is stale, so panning alone is enough.
+            var sel = target.GetComponent<KSelectable>();
+            if (sel == null)
+                return;
+            var current = SelectTool.Instance.selected;
+            if (current != sel)
+                SelectTool.Instance.Select(sel, skipSound: true);
+            if (SelectTool.Instance.selected == sel) {
+                panelTarget = target;
+                Log.Debug("OpenItemPanel: {0}".F(target.name));
+            }
+        }
+
+        // Closes the panel the last row click opened, and nothing else's: a selection
+        // the player made themselves is left alone, so switching the overlay off never
+        // steals it. The panel is only ever closed while it still stands for our target.
+        internal static void CloseInfoPanel() {
+            if (panelTarget != null && SelectTool.Instance != null && DetailsScreen.Instance != null &&
+                    SelectTool.Instance.selected?.gameObject == panelTarget) {
+                DetailsScreen.Instance.DeselectAndClose();
+                Log.Debug("CloseInfoPanel: closed the panel for {0}".F(panelTarget.name));
+            }
+            panelTarget = null;
+        }
+
+        /// <summary>
+        /// The tile-cell rows go through one of the game's two cell proxies, which it keeps
+        /// as an alternating pair so the two kinds of cell click never collide: the one that
+        /// is not already the selection is used, since asking for the selection that is
+        /// already in place changes nothing.
+        /// </summary>
+        private static GameObject FindTileProxy() {
+            var go = GameObject.Find("WorldSelectionCollider");
+            if (go == null)
+                return null;
+            var proxy = go.GetComponent<CellSelectionObject>();
+            if (proxy == null)
+                return null;
+            if (SelectTool.Instance?.selected == proxy.Selectable) {
+                var other = proxy.alternateSelectionObject;
+                return other != null ? other.gameObject : null;
+            }
+            return go;
+        }
     }
 }

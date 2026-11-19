@@ -1075,9 +1075,9 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         /// <summary>
         /// Teaches the hover card that this overlay does not want the per cell element block
-        /// unless the cell's own element matched. Registered lazily rather than in the card's
-        /// OnSpawn, so it does not matter when the tool was created and a rebuilt tool picks
-        /// the filter up again.
+        /// unless the cell's own element or its natural backwall matched. Registered lazily
+        /// rather than in the card's OnSpawn, so it does not matter when the tool was created
+        /// and a rebuilt tool picks the filter up again.
         /// </summary>
         [HarmonyPatch(typeof(SelectToolHoverTextCard), "UpdateHoverElements")]
         public static class SelectToolHoverTextCard_UpdateHoverElements_Patch {
@@ -1087,6 +1087,164 @@ namespace BobbyModding.MaterialSearchOverlay {
                 ___overlayFilterMap[MaterialSearchOverlay.ID] =
                     MaterialSearchOverlay.ShouldShowHoverCell;
                 Log.Debug("Hover filter registered for {0}".F(MaterialSearchOverlay.ID));
+            }
+        }
+
+        /// <summary>
+        /// Hides the two mini shadow-bar blocks the card draws inside the cell block: the
+        /// element bar (the cell's gas, material, mass and temperature rows, titled with the
+        /// element's upper case name) and the natural backwall bar behind it. The card filters
+        /// neither of them on its own - it only asks whether the whole cell block goes in, and
+        /// inside it the backwall bar even depends on nothing but <c>HasBackwall</c> - so each
+        /// bar gets its own suppression. Every draw is armed with the exact title the card will
+        /// write for the bar, built with the same expression the card itself uses, and once a
+        /// <c>DrawText</c> matches an armed title every text, icon and line break of that bar
+        /// until its <c>EndShadowBar</c> is skipped. Nothing on screen disagrees: <c>BeginShadowBar</c>
+        /// only remembers positions, a bar and its select border are committed at <c>EndShadowBar</c>,
+        /// and the pools' <c>EndDrawing</c> hides every entry this draw never used. A suppressed
+        /// element bar also swallows its own row breaks, so the bar behind it starts right where
+        /// it stood instead of half a tooltip lower; the backwall bar is the last thing the card
+        /// draws, so swallowing its line breaks is not worth the risk and only leaves an
+        /// invisible gap at the bottom. At most one of the two bars is armed per draw, since the
+        /// cell block itself only appears when at least one half stands.
+        /// </summary>
+        internal static bool cellBarSuppressed;
+
+        internal static string cellBarTitle;
+
+        internal static bool backwallBoxSuppressed;
+
+        internal static string backwallBoxTitle;
+
+        [HarmonyPatch]
+        public static class HoverTextDrawer_BeginDrawing_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "BeginDrawing",
+                    new System.Type[] { typeof(UnityEngine.Vector2) });
+            }
+
+            internal static void Postfix() {
+                cellBarSuppressed = false;
+                backwallBoxSuppressed = false;
+                var armedBar = (string)null;
+                var armedBox = (string)null;
+                var overlay = MaterialSearchOverlay.Instance;
+                if (overlay != null && overlay.HoverFilterActive &&
+                        OverlayScreen.Instance != null &&
+                        OverlayScreen.Instance.GetMode() == MaterialSearchOverlay.ID) {
+                    int cell = MaterialSearchOverlay.HoveredCell();
+                    if (Grid.IsValidCell(cell)) {
+                        bool tileHalf = MaterialSearchOverlay.TileSelectedAtCell(cell);
+                        bool backwallHalf = MaterialSearchOverlay.BackwallSelectedAtCell(cell);
+                        if (tileHalf || backwallHalf) {
+                            if (!tileHalf) {
+                                var element = Grid.Element[cell];
+                                if (element != null)
+                                    armedBar = element.nameUpperCase;
+                            }
+
+                            if (!backwallHalf && BackwallManager.HasBackwall(cell))
+                                armedBox = BackwallManager.At(cell).Element.nameUpperCase + " " +
+                                    STRINGS.UI.TOOLS.GENERIC.NATURAL_BACKWALL_LABEL;
+                        }
+                    }
+                }
+
+                if (armedBar != cellBarTitle)
+                    Log.Debug("Hover element bar {0}".F(armedBar != null ? "armed: " + armedBar : "disarmed"));
+                cellBarTitle = armedBar;
+                if (armedBox != backwallBoxTitle)
+                    Log.Debug("Backwall hover box {0}".F(armedBox != null ? "armed: " + armedBox : "disarmed"));
+                backwallBoxTitle = armedBox;
+            }
+        }
+
+        /// <summary>
+        /// Swallows the texts of whichever bar is suppressed. A draw of an armed title is
+        /// that bar's first line: it arms the suppression and is itself dropped, and every
+        /// later text of the same bar falls through the flags below until the bar's
+        /// <c>EndShadowBar</c> clears them. The two titles never collide: the element bar's
+        /// is a bare upper case element name, while the backwall bar's carries the natural
+        /// backwall label behind it.
+        /// </summary>
+        [HarmonyPatch]
+        public static class HoverTextDrawer_DrawText_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "DrawText",
+                    new System.Type[] { typeof(string), typeof(TextStyleSetting), typeof(Color),
+                        typeof(bool) });
+            }
+
+            internal static bool Prefix(string text, TextStyleSetting style, Color color,
+                bool override_color) {
+                if (text != null) {
+                    if (cellBarTitle != null && text == cellBarTitle) {
+                        cellBarSuppressed = true;
+                        return false;
+                    }
+
+                    if (backwallBoxTitle != null && text == backwallBoxTitle) {
+                        backwallBoxSuppressed = true;
+                        return false;
+                    }
+                }
+
+                return !(cellBarSuppressed || backwallBoxSuppressed);
+            }
+        }
+
+        [HarmonyPatch]
+        public static class HoverTextDrawer_DrawIcon_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "DrawIcon",
+                    new System.Type[] { typeof(Sprite), typeof(Color), typeof(int),
+                        typeof(int) });
+            }
+
+            internal static bool Prefix() {
+                return !(cellBarSuppressed || backwallBoxSuppressed);
+            }
+        }
+
+        /// <summary>
+        /// Swallows the line breaks inside a suppressed element bar: its rows would move the
+        /// cursor down and leave the bar behind it starting in mid-air. The break that opens
+        /// the suppressed bar ran before its title armed the suppression, so the bar keeps
+        /// the gap above it; the backwall bar is the last thing the card draws, so its
+        /// breaks are left alone and only cost an invisible gap below the tooltip.
+        /// </summary>
+        [HarmonyPatch]
+        public static class HoverTextDrawer_NewLine_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "NewLine",
+                    new System.Type[] { typeof(int) });
+            }
+
+            internal static bool Prefix() {
+                return !cellBarSuppressed;
+            }
+        }
+
+        /// <summary>
+        /// A suppressed bar ends here: skipping the commit also clears its flag, so the
+        /// shadow-bar widget and any select border are never pulled from the pools and the
+        /// next bar is untouched. For a suppressed element bar the cursor stayed where the
+        /// bar began, so the bar behind it lands right below the tooltip's rows.
+        /// </summary>
+        [HarmonyPatch(typeof(HoverTextDrawer), "EndShadowBar")]
+        public static class HoverTextDrawer_EndShadowBar_Patch {
+            internal static bool Prefix() {
+                if (cellBarSuppressed) {
+                    cellBarSuppressed = false;
+                    return false;
+                }
+
+                if (backwallBoxSuppressed) {
+                    backwallBoxSuppressed = false;
+                    return false;
+                }
+
+                return true;
             }
         }
 
@@ -1128,6 +1286,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                         OverlayScreen.Instance.GetMode() != MaterialSearchOverlay.ID)
                     return;
                 __result = Pick(___intersections, cycleSelection, previous_selection, overlay);
+                if (cycleSelection && __result == null &&
+                        TryDirectBackwallSelect(previous_selection, overlay))
+                    __result = (KSelectable)previous_selection;
             }
 
             /// <summary>
@@ -1141,11 +1302,19 @@ namespace BobbyModding.MaterialSearchOverlay {
                     MaterialSearchOverlay overlay) {
                 if (intersections == null || intersections.Count == 0)
                     return null;
+                // The game's two cell proxies always stand under the cursor, so their rules
+                // are the same for every candidate and every cycling pass: resolved once
+                // here and passed down. The rules are the tooltip's own: a half whose row
+                // in the position list has been unchecked is hidden there, too, so it must
+                // not cycle out in front of the kept half.
+                int hovered = MaterialSearchOverlay.HoveredCell();
+                bool tileKept = MaterialSearchOverlay.TileSelectedAtCell(hovered);
+                bool backwallKept = MaterialSearchOverlay.BackwallSelectedAtCell(hovered);
                 int kept = 0;
                 int previous_index = -1;
                 for (int i = 0; i < intersections.Count; i++) {
                     var selectable = intersections[i].component as KSelectable;
-                    if (!ShouldKeep(selectable, overlay))
+                    if (!ShouldKeep(selectable, overlay, tileKept, backwallKept))
                         continue;
                     if (selectable == previous_selection)
                         previous_index = kept;
@@ -1160,7 +1329,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                 int index = 0;
                 for (int i = 0; i < intersections.Count; i++) {
                     var selectable = intersections[i].component as KSelectable;
-                    if (!ShouldKeep(selectable, overlay))
+                    if (!ShouldKeep(selectable, overlay, tileKept, backwallKept))
                         continue;
                     if (index == wanted)
                         return selectable;
@@ -1170,17 +1339,76 @@ namespace BobbyModding.MaterialSearchOverlay {
             }
 
             /// <summary>
-            /// The rule the tooltip already uses: the proxies are the game's way of selecting a
-            /// tile, so they follow the cell block (an element search can still be inspected, a
-            /// creature search cannot), and everything else follows what the overlay lights up.
+            /// Cures the gap vanilla leaves on the first click of a walk along matching cells:
+            /// the game's backwall proxy is one collider that only follows the mouse while it
+            /// is unselected, so when the previous click left it selected at an earlier cell,
+            /// it is not among the new cell's intersections - once the filter empties the
+            /// list vanilla deselects, and only a second click can re-select. There is no
+            /// reason to deselect here, however: the hovered cell still wants the very proxy
+            /// that stands selected, so slide it onto the cell (its own <c>Update()</c> formula:
+            /// the cell centre on the selection layer, and its name), fire the same game-level
+            /// selection trigger <c>Select()</c> fires - its subscription re-records
+            /// SelectedCell from the moved transform and refreshes values, the guard already
+            /// holds because this click's <c>Select()</c> has not run yet - and hand back the
+            /// same object: vanilla then hits its own <c>new == previousSelection</c> guard, so
+            /// nothing unselects, the marker - a transform reference to the proxy - simply
+            /// follows the slide, and no sound churns. Only the click path: hover never wants
+            /// this, it has its own already-following proxy.
+            /// </summary>
+            private static bool TryDirectBackwallSelect(Component previous_selection,
+                    MaterialSearchOverlay overlay) {
+                if (previous_selection == null || SelectTool.Instance == null ||
+                        SelectTool.Instance.selected != previous_selection)
+                    return false;
+                var proxy = previous_selection.GetComponent<BackwallSelectionObject>();
+                if (proxy == null)
+                    return false;
+                int cell = MaterialSearchOverlay.HoveredCell();
+                if (!MaterialSearchOverlay.BackwallSelectedAtCell(cell))
+                    return false;
+                var gameObject = proxy.gameObject;
+                // Where the proxy's own Update() parks its collider when it follows the
+                // mouse: cell centre, on the selection layer.
+                var pos = Grid.CellToPos(cell, 0f, 0f, 0f) + new UnityEngine.Vector3(0.5f, 0.5f, 0f);
+                pos.z = Grid.GetLayerZ(Grid.SceneLayer.WorldSelection) + -0.5f;
+                gameObject.transform.SetPosition(pos);
+                var backwall = (KSelectable)previous_selection;
+                // The follow path also re-titles the proxy; a different matched element
+                // behind the new cell would otherwise keep the old cell's title.
+                backwall.SetName(BackwallManager.At(cell).Element.nameUpperCase + " " +
+                    STRINGS.UI.TOOLS.GENERIC.NATURAL_BACKWALL_LABEL);
+                // Vanilla clears the hover card when the object selected is the hovered
+                // one, a step its own guard now skips - mirror it here, by the very body
+                // of ClearHover() (protected in the game assembly): forget the hover,
+                // undo its highlight, and fire the hover-cleared trigger.
+                if (SelectTool.Instance.hover == backwall) {
+                    SelectTool.Instance.hover = null;
+                    backwall.Unhover();
+                    Game.Instance.Trigger(-1201923725);
+                }
+                // The game-level trigger Select() fires: the proxy subscribes to it, and
+                // OnObjectSelected takes SelectedCell from the (just moved) transform and
+                // runs UpdateValues() synchronously.
+                Game.Instance.Trigger(-1503271301, gameObject);
+                return true;
+            }
+
+            /// <summary>
+            /// The rule for one candidate: the game's two cell proxies follow what they actually
+            /// stand for - the tile proxy only when the cell's own element matched and its row
+            /// in the position list is still checked, the backwall proxy only when the cell's
+            /// natural backwall did the same - and everything else follows the tooltip's rule,
+            /// what the overlay lights up. Unchecking a row therefore removes that proxy from
+            /// the cycle, not just from the tooltip and the map.
             /// </summary>
             private static bool ShouldKeep(KSelectable selectable,
-                    MaterialSearchOverlay overlay) {
+                    MaterialSearchOverlay overlay, bool tileKept, bool backwallKept) {
                 if (selectable == null)
                     return false;
-                if (selectable.GetComponent<CellSelectionObject>() != null ||
-                        selectable.GetComponent<BackwallSelectionObject>() != null)
-                    return MaterialSearchOverlay.ShouldShowHoverCell();
+                if (selectable.GetComponent<CellSelectionObject>() != null)
+                    return tileKept;
+                if (selectable.GetComponent<BackwallSelectionObject>() != null)
+                    return backwallKept;
                 return overlay.ShouldShowHoverEntry(selectable);
             }
         }

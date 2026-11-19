@@ -34,17 +34,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                     /// and a {0} would just render blank.
                     /// </para>
                     /// </summary>
+
                     public static LocString DESCRIPTION =
-                        "Search by name to find anything in your colony and highlight it on the map.\n" +
-                        "Names can be partial and ignore case: 'hatch' finds Hatches, 'iron' finds Iron Ore.\n" +
-                        "Searchable kinds:\n" +
-                        "- Materials, e.g. Iron Ore, Bleach Stone\n" +
-                        "- Plants, seeds and food, e.g. Mealwood, Arbor Acorn, Raw Egg\n" +
-                        "- Equipment and boosters, e.g. Atmo Suit, Advanced Medical Booster\n" +
-                        "- Industrial products, e.g. Microchip, Atomic Power Bank\n" +
-                        "- Critters and duplicants, e.g. Hatches, Pufts, Duplicant\n" +
-                        "- Critter eggs, e.g. Hatch Egg\n" +
-                        "- Artifacts, e.g. Nuclear Power Plant Model\n";
+                        "Search for things in your colony (e.g., hatch, iron, meal lice, atmos suit, arbor tree, artifact, booster)" ;
 
                     public static LocString BUTTON = "Material Search Overlay";
 
