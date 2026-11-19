@@ -14,7 +14,12 @@ An Oxygen Not Included mod that lets you search the colony by name and highlight
 - **Visual highlight** — matching entities light up in place; for elements, matching tiles, natural backwalls, buildings, and debris are colored in the element's natural color and everything else is dimmed to a flat grey, so the overlay opens on a grey map and only the matches pick up color
 - **Mass totals** — selecting an element reports its total mass broken down by natural tiles, visible natural backwalls, debris, and buildings
 - **Count summary** — for everything else the label reports how many of each kind were found in the colony, counting stacked items by their units (299 stored Arbor Acorns read as `299 seeds`, not as the one or few piles they occupy); food instead reports its combined mass and calories (e.g. `20 kg (80,000 kcal)`), or mass only when calorie data is unavailable
-- **Position list** — selecting a dropdown result also lists where the matches are, in world coordinates: X and Y count cells from the bottom-left corner of the current asteroid. Tile and backwall matches are grouped into connected areas; `+` expands an area into its individual cells (100 per page), and long item lists are paged the same way. Clicking any row moves the camera there without changing the zoom level. The list covers only explored space in the active asteroid
+- **Position list** — selecting a dropdown result also lists where the matches are, in world coordinates: X and Y count cells from the bottom-left corner of the current asteroid. The list is split into one section per kind of place a match was found — **Tile areas**, **Backwall areas**, **Debris**, **Building**, **Contents** and **Entities** — and every section has its own scroll pane showing `Maximum Location Rows` rows at a time (5 by default), so a big vein scrolls instead of pushing the legend off screen
+- **Areas and groups** — a run of matching tiles or natural backwall is listed as one area row showing its bounding box (`X 12-30, Y 44-61`); its triangle unfolds it into one row per cell (the first 500, then a `… and 1,700 more` note), and the triangles on section and group headers fold whole sections or name groups away. The **Building**, **Contents** and **Entities** sections merge same-named entries into a group row (`Storage Bin (12)`) that unfolds into its instances
+- **Scroll percentages** — every section header shows where its pane is scrolled (`{0}%` style: `100%` is the top, and a section that fits reads `100%`), and a scroll that has been left mid-way stays put while rows are expanded or collapsed
+- **Row check boxes** — every section, group, area, coordinate and item row carries a check box, and unticking one hides that place from the map highlight, all the way down to single tiles inside an expanded area. The box is tri-state — a hollow square is off, a filled square means everything under the row is on, a dot means only part of it is — and clicking a partly ticked box selects the rest rather than clearing it
+- **Value columns** — the mass and count columns always read `selected / total` (`1,000 kg / 5,400 kg`, `240 / 402`), so the numbers describe exactly the same selection the map is painting, section header down to single cell. Rows that stand for one thing show their own figure instead (`X 15 Y 15`, `2 kg`, `1 item`)
+- **Camera clicks** — clicking any list row pans the camera to that spot without changing the zoom level; a row standing for exactly one cell or one object also makes the game select it, which opens the game's own info panel for that cell or object and keeps the panel until the overlay closes. A row standing for an area or a group has no single thing to select, so it only pans
 - **Pinned simulation** — selecting a result pauses the colony and refuses to unpause until the overlay is closed, via the pause key, the pause button, or the play button alike. That is what makes the position list trustworthy: tracked critters and duplicants cannot move, and items cannot be created or destroyed, while you read it. The game stays paused after the overlay closes, so you can look around; one press of the pause key then resumes
 - **Filtered hover tooltip** — while the overlay is active, hovering a cell lists only what the search matched; the cell's own element block appears only when that element matched too, so searching `hatch egg` does not also explain the oxygen the egg is sitting in
 - **Search-aware clicking** — clicking a cell picks the matching thing straight away instead of cycling through everything else in it, and clicking again walks through the other matches; a cell with no match selects nothing until the search is cleared
@@ -61,13 +66,14 @@ Subscribe on the Steam Workshop.
 2. Type any part of a name into the search field — with auto focus on, the field already has the keyboard when the overlay opens, so typing can start right away; while it has the keyboard, typing letters into it takes over from the camera keys, and closing the overlay hands the keyboard back
 3. Matching results appear in the dropdown, each labelled with its kind — click one to pin it, or step through them with `Up`/`Down` and press `Enter`
 4. The map is dimmed grey from the moment the overlay opens; every match then lights up in its own colour on top of that grey, so only the matches show colour
-5. A pinned result pauses the colony and fills in the position list below the counts. Tile and backwall matches are grouped into connected areas; press `+` to expand an area into its cells, and `Previous`/`Next` to page. Click any row to move the camera to that spot — the zoom stays where it was
-6. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
-7. Click a cell to select the match directly; click again to step through the other matches in that cell
+5. A pinned result pauses the colony and fills in the position list below the counts. Only the sections that found something show — `Tile areas (N)`, `Backwall areas (N)`, `Debris (N)`, `Building (N)`, `Contents (N)`, `Entities (N)` — each with its own scroll pane, so the mouse wheel scrolls one section without moving the others. The percentage on a header is that section's scroll position, and its `1,000 kg / 5,400 kg` and `240 / 402` columns are its selected and total mass and count
+6. Work the list with the row controls: the triangle unfolds an area into its cells (up to 500, then `… and N more`), folds a section or a name group back away, and the check box unticks whatever it covers so the map highlight drops it. Click a row to pan the camera to that spot (the zoom stays put); rows standing for one cell or one object also open the game's info panel for it, and its actions work on the real thing
+7. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
+8. Click a cell to select the match directly; click again to step through the other matches in that cell
 
 Closing the overlay clears the search field and empties the position list, so every time you open it the box is empty again. The colony stays paused after closing; press the pause key once to resume. Starting a new search, or clicking back into the search box, hides the list until the next result is pinned.
 
-The position list is a snapshot: it is taken while the colony is paused and never refreshed while it is on screen, so the coordinates do not drift under you.
+The position list is a snapshot: it is taken while the colony is paused and never refreshed while it is on screen, so the coordinates do not drift under you. A search that finds nothing says so — `Nothing found in this world`. Every pinned selection starts the list fresh — all rows ticked, all areas collapsed back to one row each, all sections at the top of their panes.
 
 ## Mod options
 
@@ -79,6 +85,7 @@ The PLib **Mods** screen has a **Material Search Overlay** options page. Changes
 | Show Type Badges | On | Labels every dropdown row with what kind of result it is |
 | Maximum Search Results | 50 | How many matches a search keeps, in the dropdown and on the map (they are always the same set). The options dialog clamps the value to 5–100 |
 | Focus Search Box On Open | On | Puts the cursor in the search box as soon as the overlay opens, from the menu button or the keybind alike. While the box has the keyboard, the camera keys type into it instead of moving the view |
+| Maximum Location Rows | 5 | How many rows each section of the position list shows at once; a longer section scrolls instead of growing the legend. The options dialog clamps the value to 2–12 |
 
 ## Building from source
 
@@ -94,4 +101,5 @@ The mod DLL is auto-deployed to your ONI Dev mod folder. See the [root README](.
 |---|---|
 | **Static ID** | `materialsearchoverlay` |
 | **API Version** | 2 |
-| **Minimum build** | 469112 |
+| **Mod version** | 2.3.0 |
+| **Minimum build** | 763023 |

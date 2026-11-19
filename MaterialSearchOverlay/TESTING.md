@@ -1,6 +1,6 @@
 # Material Search Overlay — In-Game Test Checklist
 
-**Mod version:** 2.2.0 · **Target build:** U60-763023 · **DLC:** all installed
+**Mod version:** 2.3.0 · **Target build:** U60-763612 · **DLC:** all installed
 **Goal:** prove every searchable kind works in game, with one sample name per category.
 
 **How to use this file:**
@@ -237,19 +237,23 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 
 - [ ] **PL-1 Only after a selection:** open the overlay and type `Copper Ore`. While typing, no position list is shown. Click a dropdown row (or press Enter): the list appears below the mass/count label.
 - [ ] **PL-2 Hidden again by typing:** with a list showing, type one more character in the search box, then click back into the box. Expected: the list disappears both times and only comes back when a row is pinned again.
-- [ ] **PL-3 Coordinates:** spawn a single piece of `Copper Ore` debris near the bottom-left of the map. Select the `Copper Ore` row. Expected: an item row ending in its X/Y, both small non-negative numbers counting from the asteroid's bottom-left corner. Click it: the camera lands on that debris.
-- [ ] **PL-4 Tile areas:** a copper ore vein is one `Tile areas (N)` row showing the centre coordinates and `(N cells)`. Press `+`: one row per cell appears directly under the area row, coordinates descend through the area, and the button becomes `-`. Pressing `-` collapses it again.
-- [ ] **PL-5 Cell paging:** find or sandbox-paint a matching tile area with more than 100 cells, expand it. Expected: exactly 100 cell rows plus a `Page 1 of N` row with a `Next` button; `Next` moves through the pages and `Previous` goes back. The area's own row stays where it was.
+- [ ] **PL-3 Debris coordinates:** spawn a single piece of `Copper Ore` debris near the bottom-left of the map. Select the `Copper Ore` row. Expected: a `Debris (1)` section with one row reading its coordinates — `X {x} Y {y}` — both small non-negative numbers counting from the asteroid's bottom-left corner, plus its own mass and `1 item`. Click it: the camera lands on the debris and the game opens that item's info panel.
+- [ ] **PL-4 Sections and scroll panes:** select a query that covers several kinds at once (e.g. `Steel`: tiles, debris, buildings, containers). Expected: one section per kind that found something — `Tile areas (N)`, `Backwall areas (N)`, `Debris (N)`, `Building (N)`, `Contents (N)`, `Entities (N)` — always in that order, empty sections skipped. Each section sits in its own scroll pane showing `Maximum Location Rows` rows (5 by default): a longer section scrolls with the mouse wheel over that pane, and scrolling one section never moves the others. A pinned selection that found nothing at all reads `Nothing found in this world`.
+- [ ] **PL-5 Area rows and the expand cap:** a matching tile run is listed as ONE area row showing its bounding box (`X 12-30, Y 44-61`) and its `selected / total` mass and cell-count columns; its triangle unfolds it into one coordinate row per cell (coordinates descend through the area), and folding it back restores the single area row in place. An area with more than 500 cells builds only the first 500 cell rows and then a `… and N more` note, so a huge painted area stays cheap.
 - [ ] **PL-6 Backwall areas:** with a visible matching backwall (e.g. `Sandstone`), a `Backwall areas (N)` section appears, grouped and expandable exactly like tiles.
-- [ ] **PL-7 Items:** a query matching loose items and buildings (`Hatch Egg`, `Steel`, an artifact) shows `Items (N)` with one row per object, sorted by name; loose debris reads `(debris)`, a finished building `(building)`, and a container holding a match `(contents)`. Duplicants and critters read `at X, Y` with no source word.
-- [ ] **PL-8 Camera pan:** click a tile area row, a cell row, a backwall row, and an item row in turn. Each click moves the camera to that spot and does **not** change the zoom level.
+- [ ] **PL-7 Name groups:** the `Building (N)`, `Contents (N)` and `Entities (N)` sections merge same-named entries into one group row with a count (`Storage Bin (12)`); its triangle unfolds the group into one coordinate row per instance, each showing its `X, Y`. `Debris` is flat, one row per object, no grouping. Section and group headers carry a triangle that folds the whole section or group away.
+- [ ] **PL-8 Camera pan:** click a tile area row, a cell row, a backwall row, and an item row in turn. Each click moves the camera to that spot and does **not** change the zoom level. Rows standing for exactly one cell or one object (cell, backwall and item rows) also make the game select it and open its info panel; area and group rows only pan.
 - [ ] **PL-9 Forced pause:** select any row, then immediately check the speed controls — the game is paused. Press the pause hotkey (default space): nothing happens, the game stays paused and the pause button stays lit. Click the pause button, then the play button: also nothing.
 - [ ] **PL-10 Still paused after close:** close the overlay while a result is pinned. Expected: the game is still paused. Press the pause key once: the game resumes at normal speed.
 - [ ] **PL-11 Already paused:** pause the game yourself, then open the overlay and select a row. Close it. Expected: still paused, and one press of the pause key resumes (not two).
 - [ ] **PL-12 Snapshot, not live:** with a result pinned, spawn a matching item with the Sandbox tools (spawning works while paused). Expected: the list does not change and no extra row appears. Select the row again: the new item shows up.
 - [ ] **PL-13 Load/quit:** pin a result, then load a save or quit to the main menu. Expected: no crash, the new session starts at whatever speed the save has, and the pause key works normally.
-- [ ] **PL-14 Logs:** with debug logging on, selecting a row logs `ForcedPause: begin, IsPaused=True`, `MatchLocations: ... tiles in ... areas, ... backwall cells, ... items in <ms>ms`, `MatchLocationUI: showing N locations`, and `PanToCell: cell=...` on each click. Pressing pause while pinned logs `TogglePause blocked: a search result is pinned`.
-- [ ] **PL-15 Fail if:** the list shows cells outside the active asteroid or unexplored space, coordinates are cluster-global instead of world-local, the list refreshes on its own, the zoom changes on a row click, or the game can be unpaused while the overlay is open with a pinned result.
+- [ ] **PL-14 Scroll percentage:** every section header shows where its pane is scrolled, e.g. `45%`. `100%` is the top of the section, and a section that fits in its pane reads `100%`. Scroll a section away from the top, expand or collapse an area inside it: the percentage stays put. Pin a new selection: every pane returns to 100%.
+- [ ] **PL-15 Check boxes:** every section, group, area, cell and item row carries a check box. Untick one: whatever it covers stops being highlighted on the map, all the way down to single cells inside an expanded area (untick one cell of an expanded area, and the rest of that area still lights). A box covering only part of a row shows a small dot rather than a filled square, and clicking a partly ticked box selects the rest instead of clearing it.
+- [ ] **PL-16 Value columns:** the mass and count columns on every row read `selected / total` (`1,000 kg / 5,400 kg`, `240 / 402`), so the figures describe exactly the selection the map is painting; ticking rows off moves the left figure down while the total stays. Rows standing for one thing show their own figure instead (`X 15 Y 15` row with `2 kg`, `1 item`; a cell row with `1 tile`). A folded section still shows its header numbers, but the scroll-percentage column goes blank.
+- [ ] **PL-17 Info panel cleanup:** click an item row so its info panel opens, then switch the overlay off or pin another row. Expected: the panel the mod opened gets closed; a panel the player opened themselves is left alone.
+- [ ] **PL-18 Logs:** with debug logging on, selecting a row logs `ForcedPause: begin, IsPaused=True`, `MatchLocations: ... tiles in ... areas, ... backwall cells, ... items in <ms>ms`, `MatchLocationUI: showing N entries in M sections`, and `PanToCell: cell=...` on each click. Pressing pause while pinned logs `TogglePause blocked: a search result is pinned`.
+- [ ] **PL-19 Fail if:** the list shows cells outside the active asteroid or unexplored space, coordinates are cluster-global instead of world-local, the list refreshes on its own, the zoom changes on a row click, or the game can be unpaused while the overlay is open with a pinned result.
 
 ---
 
@@ -268,14 +272,15 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 
 ## 8. Options
 
-- [ ] **OP-1 Defaults:** on a fresh config, **Enable Debug Logging = OFF**, **Show Type Badges = ON**, **Maximum Search Results = 50**, **Focus Search Box On Open = ON**.
+- [ ] **OP-1 Defaults:** on a fresh config, **Enable Debug Logging = OFF**, **Show Type Badges = ON**, **Maximum Search Results = 50**, **Focus Search Box On Open = ON**, **Maximum Location Rows = 5**.
 - [ ] **OP-2 Badges off:** turn **Show Type Badges** off and search `steel` right away — no restart needed. Rows show the swatch and name but no badge text; clicking still works.
 - [ ] **OP-3 Logging off:** turn **Enable Debug Logging** off and search once. No new debug-level `[PLib/MaterialSearchOverlay]` lines appear (the one-time mod-init INFO lines still do).
-- [ ] **OP-4 Persistence:** all four options keep their values after a restart.
+- [ ] **OP-4 Persistence:** all five options keep their values after a restart.
 - [ ] **OP-5** The mod options page opens without errors and shows the GitHub link.
 - [ ] **OP-6 Result cap live:** set **Maximum Search Results** to 10 in the options dialog, then (without restarting) search `e`. Expected: the dropdown caps at **10 rows**, and the map highlights only the matching entries in that same capped list — not more than the dropdown shows. Raise it back to 100 and retype: up to 100 rows now.
 - [ ] **OP-7 Auto focus on:** with **Focus Search Box On Open = ON** (the default), open the overlay from the menu button — the box already has the keyboard, so typing works without clicking it first. Then close it and reopen via the **keybind**: focused the same way.
 - [ ] **OP-8 Auto focus off:** set **Focus Search Box On Open = OFF** and reopen the overlay. Expected: the box does not grab the keyboard on open — nothing types until you click into the box.
+- [ ] **OP-9 Location rows live:** with a pinned selection and its position list showing, set **Maximum Location Rows** to 12 in the options dialog — no restart. Expected: every section's scroll pane now shows 12 rows before it scrolls; then drop it back to 5 and the sections shrink again. The search and its pinned selection stay intact either way.
 
 ---
 
@@ -288,7 +293,8 @@ Each test uses the same pattern: **search → pick the row with the listed badge
   - the kind badges,
   - the mass and count labels,
   - the no-match / count text,
-  - the position list headers, area/cell/item rows and pager buttons.
+  - the position list headers, area/coordinate/item rows and the row controls (triangles, check boxes, scroll panes).
+  - Note: the `.po` files shipped with this branch predate the position-list redesign and contain none of the new `LOCATION_*` strings; regenerate them first (see `translations/README.md`), or these lines will show English by design.
 - [ ] **LOC-2** No raw `STRINGS.` keys, no `{0}` / `{1}` placeholders, no missing-glyph boxes, and no text clipped out of the dropdown or label.
 - [ ] **LOC-3** Counts still show the right number in each language (e.g. `Found: 3 critters` translated, with `3` present).
 
@@ -323,6 +329,10 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - With more rows than fit in the legend panel (at high caps — e.g. `e` returns the full `Maximum Search Results` of 50), the keyboard highlight can step below the visible area; the list does not auto-scroll to follow it yet.
 - While the search box has the keyboard (auto focus, or after clicking into it), letters and camera keys type into it instead of moving the view or firing shortcuts; the overlay button still closes the overlay, and closing hands the keyboard back.
 - The position list appears only for a **pinned dropdown result**, never for free text, and shows the **active world** only, revealed cells only.
+- Each section of the list shows at most `Maximum Location Rows` rows at a time (5 by default) and scrolls; its header's percentage is where that pane sits, `100%` being the top and also what a section that fits reads.
+- The percentage a section was left at survives expanding or collapsing rows inside it; a new pinned selection starts every pane back at 100%.
+- Every row has a check box: unchecking it hides what it covers from the map highlight — down to single cells of an expanded area — and clicking a partly ticked box selects the rest rather than clearing it.
+- The mass and count columns read `selected / total`, and a box that covers only part of a row is drawn as a dot instead of a filled square.
 - Coordinates in the position list are **world-local**: `0, 0` is the bottom-left cell of the current asteroid, not of the cluster grid. A rocket interior therefore reports its own small coordinates.
 - The position list is a **snapshot** taken when the result is pinned; it is never refreshed while on screen, which is also why the colony is paused for as long as it is open.
 - The colony **stays paused** after the overlay closes. If it was already paused before the result was pinned, that earlier pause is part of the same count and still needs its one press to release.
@@ -351,8 +361,8 @@ Notes:
 
 ```text
 Item ID:        e.g. MAT-4
-Mod version:    2.2.0
-Game build:     U60-763023
+Mod version:    2.3.0
+Game build:     U60-763612
 DLC:            all / base game
 Save:           fresh sandbox / other
 
