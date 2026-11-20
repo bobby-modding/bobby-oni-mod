@@ -1,6 +1,6 @@
 # Material Search Overlay — In-Game Test Checklist
 
-**Mod version:** 2.2.0 · **Target build:** U60-763023 · **DLC:** all installed
+**Mod version:** 2.4.0 · **Target build:** U60-763612 · **DLC:** all installed
 **Goal:** prove every searchable kind works in game, with one sample name per category.
 
 **How to use this file:**
@@ -233,6 +233,61 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 
 ---
 
+## 6b. Position list and pinned pause *(new in 2.3.0)*
+
+- [ ] **PL-1 Only after a selection:** open the overlay and type `Copper Ore`. While typing, no position list is shown. Click a dropdown row (or press Enter): the list appears below the mass/count label.
+- [ ] **PL-2 Hidden again by typing:** with a list showing, type one more character in the search box, then click back into the box. Expected: the list disappears both times and only comes back when a row is pinned again.
+- [ ] **PL-3 Debris coordinates:** spawn a single piece of `Copper Ore` debris near the bottom-left of the map. Select the `Copper Ore` row. Expected: a `Debris (1)` section with one row reading its coordinates — `X {x} Y {y}` — both small non-negative numbers counting from the asteroid's bottom-left corner, plus its own mass and `1 item`. Click it: the camera lands on the debris and the game opens that item's info panel.
+- [ ] **PL-4 Sections and scroll panes:** select a query that covers several kinds at once (e.g. `Steel`: tiles, debris, buildings, containers). Expected: one section per kind that found something — `Tile areas (N)`, `Backwall areas (N)`, `Debris (N)`, `Building (N)`, `Contents (N)`, `Entities (N)` — always in that order, empty sections skipped. Each section sits in its own scroll pane showing `Maximum Location Rows` rows (5 by default): a longer section scrolls with the mouse wheel over that pane, and scrolling one section never moves the others. A pinned selection that found nothing at all reads `Nothing found in this world`.
+- [ ] **PL-5 Area rows and the expand cap:** a matching tile run is listed as ONE area row showing its bounding box (`X 12-30, Y 44-61`) and its `selected / total` mass and cell-count columns; its triangle unfolds it into one coordinate row per cell (coordinates descend through the area), and folding it back restores the single area row in place. An area with more than 500 cells builds only the first 500 cell rows and then a `… and N more` note, so a huge painted area stays cheap.
+- [ ] **PL-6 Backwall areas:** with a visible matching backwall (e.g. `Sandstone`), a `Backwall areas (N)` section appears, grouped and expandable exactly like tiles.
+- [ ] **PL-7 Name groups:** the `Building (N)`, `Contents (N)` and `Entities (N)` sections merge same-named entries into one group row with a count (`Storage Bin (12)`); its triangle unfolds the group into one coordinate row per instance, each showing its `X, Y`. `Debris` is flat, one row per object, no grouping. Section and group headers carry a triangle that folds the whole section or group away.
+- [ ] **PL-8 Camera pan:** click a tile area row, a cell row, a backwall row, and an item row in turn. Each click moves the camera to that spot and does **not** change the zoom level. Rows standing for exactly one cell or one object (cell, backwall and item rows) also make the game select it and open its info panel; area and group rows only pan.
+- [ ] **PL-9 Forced pause:** select any row, then immediately check the speed controls — the game is paused. Press the pause hotkey (default space): nothing happens, the game stays paused and the pause button stays lit. Click the pause button, then the play button: also nothing.
+- [ ] **PL-10 Still paused after close:** close the overlay while a result is pinned. Expected: the game is still paused. Press the pause key once: the game resumes at normal speed.
+- [ ] **PL-11 Already paused:** pause the game yourself, then open the overlay and select a row. Close it. Expected: still paused, and one press of the pause key resumes (not two).
+- [ ] **PL-12 Snapshot, not live:** with a result pinned, spawn a matching item with the Sandbox tools (spawning works while paused). Expected: the list does not change and no extra row appears. Select the row again: the new item shows up.
+- [ ] **PL-13 Load/quit:** pin a result, then load a save or quit to the main menu. Expected: no crash, the new session starts at whatever speed the save has, and the pause key works normally.
+- [ ] **PL-14 Scroll percentage:** every section header shows where its pane is scrolled, e.g. `45%`. `100%` is the top of the section, and a section that fits in its pane reads `100%`. Scroll a section away from the top, expand or collapse an area inside it: the percentage stays put. Pin a new selection: every pane returns to 100%.
+- [ ] **PL-15 Check boxes:** every section, group, area, cell and item row carries a check box. Untick one: whatever it covers stops being highlighted on the map, all the way down to single cells inside an expanded area (untick one cell of an expanded area, and the rest of that area still lights). A box covering only part of a row shows a small dot rather than a filled square, and clicking a partly ticked box selects the rest instead of clearing it.
+- [ ] **PL-16 Value columns:** the mass and count columns on every row read `selected / total` (`1,000 kg / 5,400 kg`, `240 / 402`), so the figures describe exactly the selection the map is painting; ticking rows off moves the left figure down while the total stays. Rows standing for one thing show their own figure instead (`X 15 Y 15` row with `2 kg`, `1 item`; a cell row with `1 tile`). A folded section still shows its header numbers, but the scroll-percentage column goes blank.
+- [ ] **PL-17 Info panel cleanup:** click an item row so its info panel opens, then switch the overlay off or pin another row. Expected: the panel the mod opened gets closed; a panel the player opened themselves is left alone.
+- [ ] **PL-18 Logs:** with debug logging on, selecting a row logs `ForcedPause: begin, IsPaused=True`, `MatchLocations: ... tiles in ... areas, ... backwall cells, ... items in <ms>ms`, `MatchLocationUI: showing N entries in M sections`, and `PanToCell: cell=...` on each click. Pressing pause while pinned logs `TogglePause blocked: a search result is pinned`.
+- [ ] **PL-19 Fail if:** the list shows cells outside the active asteroid or unexplored space, coordinates are cluster-global instead of world-local, the list refreshes on its own, the zoom changes on a row click, or the game can be unpaused while the overlay is open with a pinned result.
+
+---
+
+## 6c. Box selection on the map *(new in 2.4.0)*
+
+Two buttons above the position list, **Add area** and **Remove area**, arm a box tool on the map: drag a rectangle and every matching tile, natural backwall, building, item or creature the box covers is ticked, or unticked, with the rows below it. They work like the selection buttons in the debug panel's tile tools: drag to tick, drag to untick. Run this section on the pinned result you already have from **6b**, with the same `Copper Ore` (or `Sandstone`) selection.
+
+- [ ] **AR-1 Buttons only after a pin:** open the overlay and type `Copper Ore` as free text. Expected: **no** `Add area` / `Remove area` buttons anywhere in the legend. Pin the Material row: a horizontal pair of buttons appears above the position list. Hide the list (type one character, or click back into the box): the buttons disappear with it, and any armed tool is released.
+- [ ] **AR-2 Tooltips:** hover each button. Expected: `Drag a box over the map to select the matching cells, buildings and items inside it` on **Add area**, the same sentence with `deselect` on **Remove area**, and no raw `STRINGS.` key.
+- [ ] **AR-3 Arm:** click **Add area** while a result is pinned. Expected: that button's background turns **green** and stays green while the tool is armed; **Remove area** keeps its plain background. The map cursor becomes the vanilla box-tool cursor, the map is still in the Material Search overlay (arming does not switch overlays), and the search box loses the keyboard — typing now pans the camera instead of appending letters to the query. The log carries `AreaDragTool: armed Add` and, the first time in a session, `AreaDragTool: tool created`.
+- [ ] **AR-4 Add has nothing to add yet:** a fresh pin ticks every row, so drag any box with **Add area** armed and let go. Expected: the box is drawn and the list repaints, but nothing changes — the cells the box covers are already on. This is expected: Add only turns things on.
+- [ ] **AR-5 Carve with Remove:** click **Remove area** (the marker moves: **Remove** turns red, **Add** goes back to plain) and drag a rectangle over part of a matching tile vein. During the drag the box is tinted red and shows the vanilla area readout in the same colour (`width x height` over `N tiles`). On mouse up, expected: the matching cells inside the box go dark, cells outside it stay lit, and non-matching cells inside the box are untouched. The touched rows' check boxes become a **dot** (partly ticked) or a **hollow square** (fully off), and their `selected / total` mass and cell-count columns drop while the totals stay put — the section and area header figures follow, so the numbers still describe exactly what the map is painting. One repaint per box, not per cell.
+- [ ] **AR-6 Add it back:** arm **Add area** again and drag exactly the same rectangle. Expected: those cells light up again and every column returns to what it read before AR-5; an area that the first box had turned fully off reads a filled square again.
+- [ ] **AR-7 Folded areas:** run a box across an area that is still **folded** into one row, covering only part of it. Expected: the row's box becomes a dot and its `selected / total` figures move, without the area being expanded. Now unfold it with its triangle: the individual cell rows show which ones the box left on and which it left off, and match the map.
+- [ ] **AR-8 Multi-cell buildings:** pin a result with a `Building (N)` section that contains a building wider than one cell. Drag a box that covers one of its cells but **not** its anchor cell. Expected: the building's row ticks or unticks anyway — a building is counted from any cell it occupies, not only its corner. Now drag a box covering two or three of its cells at once: expected: its row is toggled **once**, not toggled twice and flipped back.
+- [ ] **AR-9 Debris and containers:** drag a box across loose debris and across a storage bin that holds a matching item. Expected: every loose item whose cell is inside the box unticks (or ticks), and so does the container row, each with its own `selected / total` columns moving. The box only has to touch the cell the thing stands on.
+- [ ] **AR-10 Entities:** with a pinned `Hatch` (or duplicant) result, drag a box over a creature's cell. Expected: that entity row ticks or unticks and its count column moves. The cell that matters is where the creature stood when the result was pinned, which is where it still stands — the colony is paused.
+- [ ] **AR-11 Backwall:** with a visible matching natural backwall (`Sandstone`), drag a box over some of it. Expected: those cells untick, their `Backwall` figures move, and backwall the box covers **under a solid tile** changes nothing, because it was never in the list.
+- [ ] **AR-12 Armed for good:** after a drag, drag a second box without touching the buttons again. Expected: the second box applies too. The armed button keeps its green or red background the whole time, and so does the tool after the camera has been panned or zoomed in between drags.
+- [ ] **AR-13 Handing the mouse back:** test each way of putting the tool down, and after each one confirm the select tool is back on the map and the legend buttons have lost their colour —
+  - click the **highlighted** button a second time,
+  - press `Esc` (or the vanilla cancel key) while armed,
+  - pick another game tool (dig, pipes, any build tool) while armed,
+  - close the overlay while armed.
+  A special case to check last: start a drag, let go of nothing — press `Esc` **mid-drag**. Expected: the box is dropped and the map UI works again right away; the legend accepts a click immediately after, with no dead event system and no half-drawn box left on screen.
+- [ ] **AR-14 The box never touches the sim:** after any drag, check the world itself. Expected: no tile is dug, filled, painted or spawned, no object is moved or removed, and the colony is still paused (a box drag never resumes it).
+- [ ] **AR-15 Hidden space and world edges:** drag a box that sticks out into fog of war and past the edge of the asteroid. Expected: the box is clamped to the visible world, hidden cells are not ticked and no row changes for them, and no exception appears in `Player.log`.
+- [ ] **AR-16 No shared paint:** after at least one box, use the vanilla **Dig** tool (or the debug drag tool) on the same save. Expected: its own drag box and its own area readout keep the vanilla colours — never the mod's green or red — and the mod's box is still tinted correctly on the next drag. The mod borrows the vanilla drag box, so this item proves the copy really is a copy.
+- [ ] **AR-17 Log lines:** with debug logging on, the session shows `AreaDragBar: built` once per legend build, one `MatchLocationUI: cell index N tiles, N backwall, N item cells` per pinned result, `AreaDragTool: armed Add` / `armed Remove` per arming, and `AreaDragTool: 24 Add cells` per drag — where 24 is the cells the box covered, not the matches inside it. Nothing may log `AreaDragTool: could not set ...` or an exception.
+- [ ] **AR-18 Lifecycle:** arm a box, then close the overlay, switch to another overlay and back, pin another result, and finally load a save or quit to the menu. Expected: no crash, no stuck tool, no leftover coloured button, and after a pin the buttons show again with **no** tool armed.
+- [ ] **AR-19 Fail if:** the buttons appear with no pinned result, a drag digs or paints anything, a row's numbers disagree with the map highlight after a drag, a building is missed when the box covers only its middle, the vanilla tools pick up the mod's colours, the tool drops out of use after one box, the UI stops answering after a cancelled drag, or `Player.log` carries an exception near a drag.
+
+---
+
 ## 7. Overlay and save lifecycle
 
 - [ ] **LC-1 Switching overlays:** switch to another overlay and back. Search text, dropdown, label, and highlights are cleared.
@@ -248,14 +303,15 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 
 ## 8. Options
 
-- [ ] **OP-1 Defaults:** on a fresh config, **Enable Debug Logging = OFF**, **Show Type Badges = ON**, **Maximum Search Results = 50**, **Focus Search Box On Open = ON**.
+- [ ] **OP-1 Defaults:** on a fresh config, **Enable Debug Logging = OFF**, **Show Type Badges = ON**, **Maximum Search Results = 50**, **Focus Search Box On Open = ON**, **Maximum Location Rows = 5**.
 - [ ] **OP-2 Badges off:** turn **Show Type Badges** off and search `steel` right away — no restart needed. Rows show the swatch and name but no badge text; clicking still works.
 - [ ] **OP-3 Logging off:** turn **Enable Debug Logging** off and search once. No new debug-level `[PLib/MaterialSearchOverlay]` lines appear (the one-time mod-init INFO lines still do).
-- [ ] **OP-4 Persistence:** all four options keep their values after a restart.
+- [ ] **OP-4 Persistence:** all five options keep their values after a restart.
 - [ ] **OP-5** The mod options page opens without errors and shows the GitHub link.
 - [ ] **OP-6 Result cap live:** set **Maximum Search Results** to 10 in the options dialog, then (without restarting) search `e`. Expected: the dropdown caps at **10 rows**, and the map highlights only the matching entries in that same capped list — not more than the dropdown shows. Raise it back to 100 and retype: up to 100 rows now.
 - [ ] **OP-7 Auto focus on:** with **Focus Search Box On Open = ON** (the default), open the overlay from the menu button — the box already has the keyboard, so typing works without clicking it first. Then close it and reopen via the **keybind**: focused the same way.
 - [ ] **OP-8 Auto focus off:** set **Focus Search Box On Open = OFF** and reopen the overlay. Expected: the box does not grab the keyboard on open — nothing types until you click into the box.
+- [ ] **OP-9 Location rows live:** with a pinned selection and its position list showing, set **Maximum Location Rows** to 12 in the options dialog — no restart. Expected: every section's scroll pane now shows 12 rows before it scrolls; then drop it back to 5 and the sections shrink again. The search and its pinned selection stay intact either way.
 
 ---
 
@@ -267,7 +323,10 @@ Each test uses the same pattern: **search → pick the row with the listed badge
   - the overlay legend title/description,
   - the kind badges,
   - the mass and count labels,
-  - the no-match / count text.
+  - the no-match / count text,
+  - the position list headers, area/coordinate/item rows and the row controls (triangles, check boxes, scroll panes),
+  - the **Add area** and **Remove area** button labels and their two tooltips.
+  - Note: the `.po` files shipped with this branch predate the position list and the box tool, so they contain none of the new `LOCATION_*` or `AREA_*` strings; regenerate them first (see `translations/README.md`), or these lines will show English by design.
 - [ ] **LOC-2** No raw `STRINGS.` keys, no `{0}` / `{1}` placeholders, no missing-glyph boxes, and no text clipped out of the dropdown or label.
 - [ ] **LOC-3** Counts still show the right number in each language (e.g. `Found: 3 critters` translated, with `3` present).
 
@@ -297,10 +356,27 @@ Each test uses the same pattern: **search → pick the row with the listed badge
 - Edible seeds (e.g. `Sleet Wheat Grain`) stay under **Food**; only non-food `PlantableSeed` prefabs are under **Seed**.
 - The general `Artifact` row exists even in games without artifacts; it simply highlights nothing.
 - Some DLC-gated rows (e.g. `Bionic Duplicant`) can appear in a save where that content is unavailable; they highlight nothing.
-- The overlay has no custom legend rows beyond its description.
+- The overlay legend keeps the vanilla colour rows; the search box, mass/count label, dropdown and position list are added above them.
 - The dropdown highlight starts on no row after every keystroke; the first `Up`/`Down` steps onto the first row, and both ends wrap. Hovering a row moves the same highlight, and it stays on that row after the pointer leaves.
 - With more rows than fit in the legend panel (at high caps — e.g. `e` returns the full `Maximum Search Results` of 50), the keyboard highlight can step below the visible area; the list does not auto-scroll to follow it yet.
 - While the search box has the keyboard (auto focus, or after clicking into it), letters and camera keys type into it instead of moving the view or firing shortcuts; the overlay button still closes the overlay, and closing hands the keyboard back.
+- The position list appears only for a **pinned dropdown result**, never for free text, and shows the **active world** only, revealed cells only.
+- Each section of the list shows at most `Maximum Location Rows` rows at a time (5 by default) and scrolls; its header's percentage is where that pane sits, `100%` being the top and also what a section that fits reads.
+- The percentage a section was left at survives expanding or collapsing rows inside it; a new pinned selection starts every pane back at 100%.
+- Every row has a check box: unchecking it hides what it covers from the map highlight — down to single cells of an expanded area — and clicking a partly ticked box selects the rest rather than clearing it.
+- The mass and count columns read `selected / total`, and a box that covers only part of a row is drawn as a dot instead of a filled square.
+- The **Add area** / **Remove area** buttons exist only while a pinned position list is on screen, and arming one only changes what the mouse does on the map: a drag never digs, fills, paints or spawns anything, and never resumes the paused colony.
+- On a fresh pin every row is already ticked, so **Add area** has nothing to add until something has been unticked; **Remove area** is the one that visibly carves a selection out.
+- A building, container, loose item or creature is ticked from **any** cell it occupies or stands on, not only its anchor cell, and a row is only toggled once even when the box covers several of its cells.
+- Only matching **visible** cells are touched: hidden space and non-matching cells keep their own state, and a box that hangs over the asteroid edge is clamped by the vanilla drag rules.
+- The tool stays armed for drag after drag; clicking the highlighted button again, `Esc`, choosing another game tool or closing the overlay hands the mouse back to the select tool.
+- The armed marker is the button's own background (green for add, red for remove), and the drag box and its `W x H` over `N tiles` readout carry the same tint. The mod borrows the vanilla drag box, so the vanilla dig and debug tools keep their own colours and their own readout.
+- A whole drag is applied as one edit: the rows' columns and the map highlight repaint once per box.
+- The mod's drag tool does not change the overlay you are in — it is armed on top of the Material Search overlay, and the map stays in it while you drag.
+- Coordinates in the position list are **world-local**: `0, 0` is the bottom-left cell of the current asteroid, not of the cluster grid. A rocket interior therefore reports its own small coordinates.
+- The position list is a **snapshot** taken when the result is pinned; it is never refreshed while on screen, which is also why the colony is paused for as long as it is open.
+- The colony **stays paused** after the overlay closes. If it was already paused before the result was pinned, that earlier pause is part of the same count and still needs its one press to release.
+- Areas are **8-connected**: cells that only touch at a corner belong to the same area. An area row shows the centre of its bounding box, which need not be a matching cell itself.
 - Artifacts cannot be spawned with the sandbox Spawn tool.
 - Debug logging is off by default and is very verbose when on.
 
@@ -325,13 +401,14 @@ Notes:
 
 ```text
 Item ID:        e.g. MAT-4
-Mod version:    2.2.0
-Game build:     U60-763023
+Mod version:    2.4.0
+Game build:     U60-763612
 DLC:            all / base game
 Save:           fresh sandbox / other
 
 Search query:
 Row selected:   name + badge
+Box drag:       Add area / Remove area, from cell X Y to cell X Y (or n/a)
 
 What I did:
 What I expected:

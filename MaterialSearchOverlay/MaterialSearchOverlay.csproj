@@ -6,7 +6,7 @@
     <RootNamespace>MaterialSearchOverlay</RootNamespace>
     <AssemblyName>MaterialSearchOverlay</AssemblyName>
 
-    <Version>2.2.1</Version>
+    <Version>2.4.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
 
@@ -42,6 +42,13 @@
     </Reference>
     <Reference Include="Assembly-CSharp-firstpass">
       <HintPath>$(GameLibsFolder)/Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <!-- KFMOD's PlayUISound has a string and an EventReference overload, and the string is
+         implicitly convertible to EventReference (FMODUnity), so resolving either call needs
+         that assembly at compile time. Private=False: the game ships it. -->
+    <Reference Include="FMODUnity">
+      <HintPath>$(GameLibsFolder)/FMODUnity.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine">

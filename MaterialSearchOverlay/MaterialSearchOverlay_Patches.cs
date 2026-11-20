@@ -60,13 +60,20 @@ namespace BobbyModding.MaterialSearchOverlay {
             ShowTypeBadges = options.ShowTypeBadges;
             SearchIndex.MaxResults = options.MaxSearchResults;
             AutoFocusSearch = options.AutoFocusSearch;
-            Log.Debug("ApplyOptions: debug={0} badges={1} maxResults={2} autoFocus={3}".F(
-                Log.DebugEnabled, ShowTypeBadges, SearchIndex.MaxResults, AutoFocusSearch));
+            MatchLocationUI.SetVisibleRows(options.MaxLocationRows);
+            Log.Debug("ApplyOptions: debug={0} badges={1} maxResults={2} autoFocus={3} locationRows={4}".F(
+                Log.DebugEnabled, ShowTypeBadges, SearchIndex.MaxResults, AutoFocusSearch,
+                options.MaxLocationRows));
         }
 
         /// <summary>Empties the search box, if the legend has built one yet.</summary>
         internal static void ClearSearchField() {
             OverlayLegend_OnSpawn_Patch.ClearSearchField();
+        }
+
+        /// <summary>Releases the keyboard when the search box is about to be hidden.</summary>
+        internal static void DeselectSearchField() {
+            OverlayLegend_OnSpawn_Patch.DeselectSearchField();
         }
 
         private static readonly Type OVERLAY_TYPE = typeof(OverlayMenu).GetNestedType(
@@ -345,6 +352,10 @@ namespace BobbyModding.MaterialSearchOverlay {
                         });
                         input.onSelect.AddListener(_ => {
                             Log.Debug("onSelect: input.text='{0}'".F(input.text));
+                            // Clicking back into the box means the player is searching again;
+                            // positions from the pinned result no longer describe what is
+                            // about to be looked at.
+                            MatchLocationUI.Hide();
                             if (!string.IsNullOrEmpty(input.text))
                                 PopulateDropdown(input.text);
                         });
@@ -386,6 +397,11 @@ namespace BobbyModding.MaterialSearchOverlay {
                 MassLabel = massLabelObj;
                 Log.Debug("Postfix: MassLabel built");
 
+                // Below the result label and above the dropdown, and hidden until a result is
+                // pinned, because the buttons act on the position list.
+                AreaDragBar.Build(__instance.transform);
+                Log.Debug("Postfix: area drag bar built");
+
                 var labelPanel = new PPanel("DropdownItems") {
                     Direction = PanelDirection.Vertical,
                     FlexSize = new Vector2(1, 0),
@@ -399,6 +415,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                 sgo.SetActive(false);
                 Patches.DropdownContainer = sgo;
                 Log.Debug("Postfix: DropdownContainer built, active={0}".F(sgo.activeInHierarchy));
+                // Built after the search box so it sits below it in the legend, and left hidden
+                // until a result is pinned.
+                MatchLocationUI.Init(__instance);
             }
 
             /// <summary>
@@ -429,6 +448,24 @@ namespace BobbyModding.MaterialSearchOverlay {
                 var input = SearchInput;
                 if (input != null && !string.IsNullOrEmpty(input.text))
                     input.SetTextWithoutNotify("");
+            }
+
+            /// <summary>
+            /// Hands the keyboard back to the game when the overlay closes. Hiding the box is
+            /// not enough on its own: an input field can stay as the EventSystem's current
+            /// selection after its GameObject goes inactive, and the camera treats a selected
+            /// input field as "the player is typing", which would swallow every movement key
+            /// from then on.
+            /// </summary>
+            internal static void DeselectSearchField() {
+                var input = SearchInput;
+                var current = UnityEngine.EventSystems.EventSystem.current;
+                if (input == null || current == null)
+                    return;
+                if (current.currentSelectedGameObject == input.gameObject) {
+                    input.DeactivateInputField();
+                    current.SetSelectedGameObject(null);
+                }
             }
 
             private static void PopulateDropdown(string text) {
@@ -685,8 +722,13 @@ namespace BobbyModding.MaterialSearchOverlay {
                     entry?.DisplayName ?? "null"));
                 suppressDropdown = true;
                 if (MaterialSearchOverlay.Instance != null) {
+                    // Freeze the colony before the positions are read, so the snapshot the
+                    // list shows is what the player will find when they click a row.
+                    ForcedPause.Begin();
                     MaterialSearchOverlay.Instance.SelectEntry(entry);
                     ShowResultLabel();
+                    var overlay = MaterialSearchOverlay.Instance;
+                    MatchLocationUI.Show(MatchLocationCollector.Build(overlay.Matches, entry));
                     Log.Debug("OnResultSelected: calling ForceOverlayUpdate");
                     Game.Instance.ForceOverlayUpdate();
                     Log.Debug("OnResultSelected: ForceOverlayUpdate returned");
@@ -1038,9 +1080,9 @@ namespace BobbyModding.MaterialSearchOverlay {
 
         /// <summary>
         /// Teaches the hover card that this overlay does not want the per cell element block
-        /// unless the cell's own element matched. Registered lazily rather than in the card's
-        /// OnSpawn, so it does not matter when the tool was created and a rebuilt tool picks
-        /// the filter up again.
+        /// unless the cell's own element or its natural backwall matched. Registered lazily
+        /// rather than in the card's OnSpawn, so it does not matter when the tool was created
+        /// and a rebuilt tool picks the filter up again.
         /// </summary>
         [HarmonyPatch(typeof(SelectToolHoverTextCard), "UpdateHoverElements")]
         public static class SelectToolHoverTextCard_UpdateHoverElements_Patch {
@@ -1050,6 +1092,164 @@ namespace BobbyModding.MaterialSearchOverlay {
                 ___overlayFilterMap[MaterialSearchOverlay.ID] =
                     MaterialSearchOverlay.ShouldShowHoverCell;
                 Log.Debug("Hover filter registered for {0}".F(MaterialSearchOverlay.ID));
+            }
+        }
+
+        /// <summary>
+        /// Hides the two mini shadow-bar blocks the card draws inside the cell block: the
+        /// element bar (the cell's gas, material, mass and temperature rows, titled with the
+        /// element's upper case name) and the natural backwall bar behind it. The card filters
+        /// neither of them on its own - it only asks whether the whole cell block goes in, and
+        /// inside it the backwall bar even depends on nothing but <c>HasBackwall</c> - so each
+        /// bar gets its own suppression. Every draw is armed with the exact title the card will
+        /// write for the bar, built with the same expression the card itself uses, and once a
+        /// <c>DrawText</c> matches an armed title every text, icon and line break of that bar
+        /// until its <c>EndShadowBar</c> is skipped. Nothing on screen disagrees: <c>BeginShadowBar</c>
+        /// only remembers positions, a bar and its select border are committed at <c>EndShadowBar</c>,
+        /// and the pools' <c>EndDrawing</c> hides every entry this draw never used. A suppressed
+        /// element bar also swallows its own row breaks, so the bar behind it starts right where
+        /// it stood instead of half a tooltip lower; the backwall bar is the last thing the card
+        /// draws, so swallowing its line breaks is not worth the risk and only leaves an
+        /// invisible gap at the bottom. At most one of the two bars is armed per draw, since the
+        /// cell block itself only appears when at least one half stands.
+        /// </summary>
+        internal static bool cellBarSuppressed;
+
+        internal static string cellBarTitle;
+
+        internal static bool backwallBoxSuppressed;
+
+        internal static string backwallBoxTitle;
+
+        [HarmonyPatch]
+        public static class HoverTextDrawer_BeginDrawing_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "BeginDrawing",
+                    new System.Type[] { typeof(UnityEngine.Vector2) });
+            }
+
+            internal static void Postfix() {
+                cellBarSuppressed = false;
+                backwallBoxSuppressed = false;
+                var armedBar = (string)null;
+                var armedBox = (string)null;
+                var overlay = MaterialSearchOverlay.Instance;
+                if (overlay != null && overlay.HoverFilterActive &&
+                        OverlayScreen.Instance != null &&
+                        OverlayScreen.Instance.GetMode() == MaterialSearchOverlay.ID) {
+                    int cell = MaterialSearchOverlay.HoveredCell();
+                    if (Grid.IsValidCell(cell)) {
+                        bool tileHalf = MaterialSearchOverlay.TileSelectedAtCell(cell);
+                        bool backwallHalf = MaterialSearchOverlay.BackwallSelectedAtCell(cell);
+                        if (tileHalf || backwallHalf) {
+                            if (!tileHalf) {
+                                var element = Grid.Element[cell];
+                                if (element != null)
+                                    armedBar = element.nameUpperCase;
+                            }
+
+                            if (!backwallHalf && BackwallManager.HasBackwall(cell))
+                                armedBox = BackwallManager.At(cell).Element.nameUpperCase + " " +
+                                    STRINGS.UI.TOOLS.GENERIC.NATURAL_BACKWALL_LABEL;
+                        }
+                    }
+                }
+
+                if (armedBar != cellBarTitle)
+                    Log.Debug("Hover element bar {0}".F(armedBar != null ? "armed: " + armedBar : "disarmed"));
+                cellBarTitle = armedBar;
+                if (armedBox != backwallBoxTitle)
+                    Log.Debug("Backwall hover box {0}".F(armedBox != null ? "armed: " + armedBox : "disarmed"));
+                backwallBoxTitle = armedBox;
+            }
+        }
+
+        /// <summary>
+        /// Swallows the texts of whichever bar is suppressed. A draw of an armed title is
+        /// that bar's first line: it arms the suppression and is itself dropped, and every
+        /// later text of the same bar falls through the flags below until the bar's
+        /// <c>EndShadowBar</c> clears them. The two titles never collide: the element bar's
+        /// is a bare upper case element name, while the backwall bar's carries the natural
+        /// backwall label behind it.
+        /// </summary>
+        [HarmonyPatch]
+        public static class HoverTextDrawer_DrawText_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "DrawText",
+                    new System.Type[] { typeof(string), typeof(TextStyleSetting), typeof(Color),
+                        typeof(bool) });
+            }
+
+            internal static bool Prefix(string text, TextStyleSetting style, Color color,
+                bool override_color) {
+                if (text != null) {
+                    if (cellBarTitle != null && text == cellBarTitle) {
+                        cellBarSuppressed = true;
+                        return false;
+                    }
+
+                    if (backwallBoxTitle != null && text == backwallBoxTitle) {
+                        backwallBoxSuppressed = true;
+                        return false;
+                    }
+                }
+
+                return !(cellBarSuppressed || backwallBoxSuppressed);
+            }
+        }
+
+        [HarmonyPatch]
+        public static class HoverTextDrawer_DrawIcon_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "DrawIcon",
+                    new System.Type[] { typeof(Sprite), typeof(Color), typeof(int),
+                        typeof(int) });
+            }
+
+            internal static bool Prefix() {
+                return !(cellBarSuppressed || backwallBoxSuppressed);
+            }
+        }
+
+        /// <summary>
+        /// Swallows the line breaks inside a suppressed element bar: its rows would move the
+        /// cursor down and leave the bar behind it starting in mid-air. The break that opens
+        /// the suppressed bar ran before its title armed the suppression, so the bar keeps
+        /// the gap above it; the backwall bar is the last thing the card draws, so its
+        /// breaks are left alone and only cost an invisible gap below the tooltip.
+        /// </summary>
+        [HarmonyPatch]
+        public static class HoverTextDrawer_NewLine_Patch {
+            private static MethodBase TargetMethod() {
+                return AccessTools.Method(typeof(HoverTextDrawer), "NewLine",
+                    new System.Type[] { typeof(int) });
+            }
+
+            internal static bool Prefix() {
+                return !cellBarSuppressed;
+            }
+        }
+
+        /// <summary>
+        /// A suppressed bar ends here: skipping the commit also clears its flag, so the
+        /// shadow-bar widget and any select border are never pulled from the pools and the
+        /// next bar is untouched. For a suppressed element bar the cursor stayed where the
+        /// bar began, so the bar behind it lands right below the tooltip's rows.
+        /// </summary>
+        [HarmonyPatch(typeof(HoverTextDrawer), "EndShadowBar")]
+        public static class HoverTextDrawer_EndShadowBar_Patch {
+            internal static bool Prefix() {
+                if (cellBarSuppressed) {
+                    cellBarSuppressed = false;
+                    return false;
+                }
+
+                if (backwallBoxSuppressed) {
+                    backwallBoxSuppressed = false;
+                    return false;
+                }
+
+                return true;
             }
         }
 
@@ -1090,7 +1290,80 @@ namespace BobbyModding.MaterialSearchOverlay {
                         OverlayScreen.Instance == null ||
                         OverlayScreen.Instance.GetMode() != MaterialSearchOverlay.ID)
                     return;
+                var vanilla = __result;
                 __result = Pick(___intersections, cycleSelection, previous_selection, overlay);
+                if (cycleSelection && __result == null &&
+                        TryDirectBackwallSelect(previous_selection, overlay))
+                    __result = (KSelectable)previous_selection;
+                DiagPick(cycleSelection, ___intersections, previous_selection, vanilla, __result,
+                    overlay);
+            }
+
+            /// <summary>
+            /// One line per click, telling what the game would have picked, what the filter
+            /// picked instead, and every candidate under the cursor with its keep verdict, plus
+            /// the state of the hovered cell. Hover picks are only written when the pick or the
+            /// cell changes, since this runs once per frame. Diagnostics only.
+            /// </summary>
+            private static void DiagPick(bool cycleSelection,
+                    List<InterfaceTool.Intersection> intersections, Component previous,
+                    KSelectable vanilla, KSelectable picked, MaterialSearchOverlay overlay) {
+                int hovered = MaterialSearchOverlay.HoveredCell();
+                if (cycleSelection) {
+                    MaterialSearchOverlay.LogHoverCell(hovered);
+                    bool tileKept = MaterialSearchOverlay.TileSelectedAtCell(hovered);
+                    bool backwallKept = MaterialSearchOverlay.BackwallSelectedAtCell(hovered);
+                    Log.Debug("Click pick diag: cell={0} previous={1} vanilla={2} picked={3} | candidates: {4}".
+                        F(hovered, Describe(previous), Describe(vanilla), Describe(picked),
+                            Candidates(intersections, overlay, tileKept, backwallKept)));
+                    return;
+                }
+                if (picked == lastHoverPick && hovered == lastHoverCell)
+                    return;
+                lastHoverPick = picked;
+                lastHoverCell = hovered;
+                Log.Debug("Hover pick diag: cell={0} vanilla={1} picked={2}".F(hovered,
+                    Describe(vanilla), Describe(picked)));
+            }
+
+            private static KSelectable lastHoverPick;
+
+            private static int lastHoverCell = -2;
+
+            /// <summary>
+            /// Names one candidate and what it is: the game's tile proxy, its backwall proxy,
+            /// or an ordinary selectable. Diagnostics only.
+            /// </summary>
+            private static string Describe(Component component) {
+                if (component == null)
+                    return "null";
+                var selectable = component as KSelectable;
+                if (selectable == null)
+                    return component.name;
+                if (component.GetComponent<CellSelectionObject>() != null)
+                    return component.name + " (tile proxy)";
+                if (component.GetComponent<BackwallSelectionObject>() != null)
+                    return component.name + " (backwall proxy)";
+                return component.name + " (" + selectable.GetName() + ")";
+            }
+
+            /// <summary>
+            /// Every candidate in the game's own order, each tagged with the filter's verdict,
+            /// so a proxy that should have been dropped is visible. Diagnostics only.
+            /// </summary>
+            private static string Candidates(List<InterfaceTool.Intersection> intersections,
+                    MaterialSearchOverlay overlay, bool tileKept, bool backwallKept) {
+                if (intersections == null || intersections.Count == 0)
+                    return "none";
+                var text = new System.Text.StringBuilder();
+                for (int i = 0; i < intersections.Count; i++) {
+                    var component = intersections[i].component;
+                    if (i > 0)
+                        text.Append(" ; ");
+                    text.Append(Describe(component)).Append(ShouldKeep(component as KSelectable,
+                        overlay, tileKept, backwallKept) ? " KEEP" : " drop");
+                }
+                return text.ToString();
             }
 
             /// <summary>
@@ -1104,11 +1377,19 @@ namespace BobbyModding.MaterialSearchOverlay {
                     MaterialSearchOverlay overlay) {
                 if (intersections == null || intersections.Count == 0)
                     return null;
+                // The game's two cell proxies always stand under the cursor, so their rules
+                // are the same for every candidate and every cycling pass: resolved once
+                // here and passed down. The rules are the tooltip's own: a half whose row
+                // in the position list has been unchecked is hidden there, too, so it must
+                // not cycle out in front of the kept half.
+                int hovered = MaterialSearchOverlay.HoveredCell();
+                bool tileKept = MaterialSearchOverlay.TileSelectedAtCell(hovered);
+                bool backwallKept = MaterialSearchOverlay.BackwallSelectedAtCell(hovered);
                 int kept = 0;
                 int previous_index = -1;
                 for (int i = 0; i < intersections.Count; i++) {
                     var selectable = intersections[i].component as KSelectable;
-                    if (!ShouldKeep(selectable, overlay))
+                    if (!ShouldKeep(selectable, overlay, tileKept, backwallKept))
                         continue;
                     if (selectable == previous_selection)
                         previous_index = kept;
@@ -1123,7 +1404,7 @@ namespace BobbyModding.MaterialSearchOverlay {
                 int index = 0;
                 for (int i = 0; i < intersections.Count; i++) {
                     var selectable = intersections[i].component as KSelectable;
-                    if (!ShouldKeep(selectable, overlay))
+                    if (!ShouldKeep(selectable, overlay, tileKept, backwallKept))
                         continue;
                     if (index == wanted)
                         return selectable;
@@ -1133,34 +1414,355 @@ namespace BobbyModding.MaterialSearchOverlay {
             }
 
             /// <summary>
-            /// The rule the tooltip already uses: the proxies are the game's way of selecting a
-            /// tile, so they follow the cell block (an element search can still be inspected, a
-            /// creature search cannot), and everything else follows what the overlay lights up.
+            /// Cures the gap vanilla leaves on the first click of a walk along matching cells:
+            /// the game's backwall proxy is one collider that only follows the mouse while it
+            /// is unselected, so when the previous click left it selected at an earlier cell,
+            /// it is not among the new cell's intersections - once the filter empties the
+            /// list vanilla deselects, and only a second click can re-select. There is no
+            /// reason to deselect here, however: the hovered cell still wants the very proxy
+            /// that stands selected, so slide it onto the cell (its own <c>Update()</c> formula:
+            /// the cell centre on the selection layer, and its name), fire the same game-level
+            /// selection trigger <c>Select()</c> fires - its subscription re-records
+            /// SelectedCell from the moved transform and refreshes values, the guard already
+            /// holds because this click's <c>Select()</c> has not run yet - and hand back the
+            /// same object: vanilla then hits its own <c>new == previousSelection</c> guard, so
+            /// nothing unselects, the marker - a transform reference to the proxy - simply
+            /// follows the slide, and no sound churns. Only the click path: hover never wants
+            /// this, it has its own already-following proxy.
+            /// </summary>
+            private static bool TryDirectBackwallSelect(Component previous_selection,
+                    MaterialSearchOverlay overlay) {
+                if (previous_selection == null || SelectTool.Instance == null ||
+                        SelectTool.Instance.selected != previous_selection)
+                    return false;
+                var proxy = previous_selection.GetComponent<BackwallSelectionObject>();
+                if (proxy == null)
+                    return false;
+                int cell = MaterialSearchOverlay.HoveredCell();
+                if (!MaterialSearchOverlay.BackwallSelectedAtCell(cell))
+                    return false;
+                var gameObject = proxy.gameObject;
+                // Where the proxy's own Update() parks its collider when it follows the
+                // mouse: cell centre, on the selection layer.
+                var pos = Grid.CellToPos(cell, 0f, 0f, 0f) + new UnityEngine.Vector3(0.5f, 0.5f, 0f);
+                pos.z = Grid.GetLayerZ(Grid.SceneLayer.WorldSelection) + -0.5f;
+                gameObject.transform.SetPosition(pos);
+                var backwall = (KSelectable)previous_selection;
+                // The follow path also re-titles the proxy; a different matched element
+                // behind the new cell would otherwise keep the old cell's title.
+                backwall.SetName(BackwallManager.At(cell).Element.nameUpperCase + " " +
+                    STRINGS.UI.TOOLS.GENERIC.NATURAL_BACKWALL_LABEL);
+                // Vanilla clears the hover card when the object selected is the hovered
+                // one, a step its own guard now skips - mirror it here, by the very body
+                // of ClearHover() (protected in the game assembly): forget the hover,
+                // undo its highlight, and fire the hover-cleared trigger.
+                if (SelectTool.Instance.hover == backwall) {
+                    SelectTool.Instance.hover = null;
+                    backwall.Unhover();
+                    Game.Instance.Trigger(-1201923725);
+                }
+                // The game-level trigger Select() fires: the proxy subscribes to it, and
+                // OnObjectSelected takes SelectedCell from the (just moved) transform and
+                // runs UpdateValues() synchronously.
+                Game.Instance.Trigger(-1503271301, gameObject);
+                return true;
+            }
+
+            /// <summary>
+            /// The rule for one candidate: the game's two cell proxies follow what they actually
+            /// stand for - the tile proxy only when the cell's own element matched and its row
+            /// in the position list is still checked, the backwall proxy only when the cell's
+            /// natural backwall did the same - and everything else follows the tooltip's rule,
+            /// what the overlay lights up. Unchecking a row therefore removes that proxy from
+            /// the cycle, not just from the tooltip and the map.
             /// </summary>
             private static bool ShouldKeep(KSelectable selectable,
-                    MaterialSearchOverlay overlay) {
+                    MaterialSearchOverlay overlay, bool tileKept, bool backwallKept) {
                 if (selectable == null)
                     return false;
-                if (selectable.GetComponent<CellSelectionObject>() != null ||
-                        selectable.GetComponent<BackwallSelectionObject>() != null)
-                    return MaterialSearchOverlay.ShouldShowHoverCell();
+                if (selectable.GetComponent<CellSelectionObject>() != null)
+                    return tileKept;
+                if (selectable.GetComponent<BackwallSelectionObject>() != null)
+                    return backwallKept;
                 return overlay.ShouldShowHoverEntry(selectable);
             }
         }
 
         /// <summary>
-        /// Feeds the arrow keys to the search dropdown. This sits on TMP's own per frame
-        /// selected-object update rather than on its key handling because that handler returns
-        /// the protected nested <c>EditState</c>, which a prefix in this assembly cannot
-        /// declare, so the press cannot be swallowed before TMP sees it. A postfix needs
-        /// nothing swallowed: the arrow keys are unbound in the base game, the update runs only
-        /// while the field is focused, and it runs after TMP has moved the caret - which is
-        /// exactly where the caret has to be put back.
+        /// Diagnostics only: writes every selection the game makes through the select tool,
+        /// whoever asked for it, so a row click can be followed through to the panel the game
+        /// ends up showing. Safe to delete.
+        /// </summary>
+        [HarmonyPatch(typeof(SelectTool), nameof(SelectTool.Select))]
+        public static class SelectTool_Select_Diag_Patch {
+            internal static void Postfix(SelectTool __instance, KSelectable new_selected,
+                    bool skipSound) {
+                Log.Debug("SelectTool.Select diag: requested={0} skipSound={1} -> selected={2}".
+                    F(new_selected == null ? "null" : new_selected.name, skipSound,
+                        __instance.selected == null ? "null" : __instance.selected.name));
+            }
+        }
+
+        /// <summary>
+        /// Plays the very sound vanilla's own sound block plays after a selection: the single
+        /// click when the tooltip stood for one thing, the parameterised cycling click (with
+        /// the same index vanilla would have used) when it offered several. Used where vanilla
+        /// stays silent but the player did click something: the repeated backwall click on the
+        /// same proxy, which vanilla's "already selected" guard swallows before its sound
+        /// block, and a list row that re-opens the panel of the thing it already selected.
+        /// </summary>
+        internal static void PlaySelectClick(SelectToolHoverTextCard card) {
+            int count = card == null ? 0 : card.recentNumberOfDisplayedSelectables;
+            if (count > 1) {
+                int index = (card.currentSelectedSelectableIndex + 1) % count;
+                KFMOD.PlayUISoundWithParameter(GlobalAssets.GetSound("Select_full"),
+                    "selection", index);
+            } else {
+                KFMOD.PlayUISound(GlobalAssets.GetSound("Select_empty"));
+            }
+        }
+
+        /// <summary>
+        /// Gives a backwall cell click the click sound vanilla leaves out. The backwall proxy is
+        /// one object for the whole map, so the step from one backwall cell to the next asks the
+        /// tool for the object it already holds: <see cref="SelectTool.Select"/> returns at its
+        /// "already selected" guard before its sound block, and the first click on a
+        /// backwall-only cell finds an empty tooltip and is treated as "nothing to click".
+        /// Both shapes are exactly "vanilla did not play", which is the only case patched here,
+        /// so a click that vanilla already sounded never gets a second sound.
+        /// </summary>
+        [HarmonyPatch(typeof(SelectTool), nameof(SelectTool.Select))]
+        public static class SelectTool_Select_BackwallClickSound_Patch {
+            internal static void Prefix(SelectTool __instance, out KSelectable __state) {
+                __state = __instance.selected;
+            }
+
+            internal static void Postfix(SelectTool __instance, KSelectable new_selected,
+                    bool skipSound, KSelectable __state) {
+                // skipSound is the overlay's own selections: row clicks ask for silence only
+                // when the row stands for no single thing, and a panel refresh changes nothing.
+                if (skipSound || new_selected == null)
+                    return;
+                if (__instance.selected != new_selected)
+                    return;
+                if (new_selected.GetComponent<BackwallSelectionObject>() == null)
+                    return;
+                var card = __instance.GetComponent<SelectToolHoverTextCard>();
+                bool vanillaSilent = __state == new_selected || card == null ||
+                    card.recentNumberOfDisplayedSelectables == 0;
+                Log.Debug("Backwall click sound diag: previous={0} selected={1} count={2} ".
+                    F(__state == null ? "null" : __state.name, new_selected.name,
+                        card == null ? -1 : card.recentNumberOfDisplayedSelectables) +
+                    "index={0} skipSound={1} vanillaSilent={2}".F(
+                        card == null ? -1 : card.currentSelectedSelectableIndex, skipSound,
+                        vanillaSilent));
+                if (vanillaSilent)
+                    PlaySelectClick(card);
+            }
+        }
+
+        /// <summary>
+        /// Gives the backwall proxy the two visual marks vanilla leaves off it: the shared
+        /// bobbing selection marker (its KSelectable is built with DisableSelectMarker) and the
+        /// cell-sized frame a selected tile shows (it has no SelectedDisplaySprite of its own).
+        /// Both are the game's own: turning the flag off makes SelectTool.Select position and
+        /// enable its marker exactly as for a tile, and the frame is a copy of the live tile
+        /// proxy's SelectedDisplaySprite switched to its Sprite_Selected.
+        /// </summary>
+        [HarmonyPatch(typeof(BackwallSelectionObject), "OnSpawn")]
+        public static class BackwallSelectionObject_OnSpawn_Marker_Patch {
+            internal static void Postfix(BackwallSelectionObject __instance) {
+                var selectable = __instance.GetComponent<KSelectable>();
+                if (selectable == null)
+                    return;
+                selectable.DisableSelectMarker = false;
+                var frame = __instance.gameObject.GetComponent<BackwallSelectionFrame>();
+                if (frame == null)
+                    frame = __instance.gameObject.AddComponent<BackwallSelectionFrame>();
+                frame.Init(selectable);
+                Log.Debug("Backwall marker diag: chevron=on frame={0}".F(
+                    frame.HasFrame ? "built" : "pending"));
+            }
+        }
+
+        /// <summary>
+        /// Keeps a copy of the tile selection frame under the backwall proxy and shows it only
+        /// while the proxy is the game's selection, with the same conditions the game uses for
+        /// a tile (default tool, UI visible). It lives on the proxy because a component cannot
+        /// switch its own GameObject back on after hide, and it retries the copy on later
+        /// frames in case the game built the backwall proxy before its tile proxies.
+        /// </summary>
+        internal sealed class BackwallSelectionFrame : MonoBehaviour {
+            private const float FRAME_SCALE = 25f / 64f;
+
+            private KSelectable owner;
+
+            private GameObject frame;
+
+            internal bool HasFrame => frame != null;
+
+            internal void Init(KSelectable selectable) {
+                owner = selectable;
+            }
+
+            private void LateUpdate() {
+                if (frame == null && !TryBuild())
+                    return;
+                bool show = owner != null && SelectTool.Instance != null &&
+                    SelectTool.Instance.selected == owner && PlayerController.Instance != null &&
+                    PlayerController.Instance.IsUsingDefaultTool() && !DebugHandler.HideUI;
+                if (frame.activeSelf != show)
+                    frame.SetActive(show);
+            }
+
+            /// <summary>
+            /// Copies the tile proxy's frame so sprite, sorting layer, order, local position and
+            /// pivot all match what the game shows around a selected tile.
+            /// </summary>
+            private bool TryBuild() {
+                var go = GameObject.Find("WorldSelectionCollider");
+                var tile = go == null ? null : go.GetComponent<CellSelectionObject>();
+                if (tile == null || tile.SelectedDisplaySprite == null ||
+                        tile.SelectedDisplaySprite.GetComponent<SpriteRenderer>() == null)
+                    return false;
+                frame = UnityEngine.Object.Instantiate(tile.SelectedDisplaySprite, transform,
+                    false);
+                frame.name = "Backwall Selection Display";
+                frame.transform.localScale = Vector3.one * FRAME_SCALE;
+                frame.GetComponent<SpriteRenderer>().sprite = tile.Sprite_Selected;
+                frame.SetActive(false);
+                Log.Debug("Backwall marker diag: frame built from {0}".F(tile.name));
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Diagnostics only: writes which object the details panel is being pointed at and what
+        /// that object reports as its element, which is exactly what the panel will title
+        /// itself with. This is the line that tells whether the panel was pointed at the tile
+        /// proxy or at the backwall proxy. Safe to delete.
+        /// </summary>
+        [HarmonyPatch(typeof(DetailsScreen), nameof(DetailsScreen.Refresh), typeof(GameObject))]
+        public static class DetailsScreen_Refresh_Diag_Patch {
+            internal static void Prefix(DetailsScreen __instance, GameObject go) {
+                var proxy = go == null ? null : go.GetComponent<ICellSelectionProxy>();
+                Log.Debug("DetailsScreen.Refresh diag: go={0} proxy={1} element={2} previousTarget={3}".
+                    F(go == null ? "null" : go.name,
+                        proxy == null ? "none (KPrefabID object?)" : proxy.GetType().Name,
+                        proxy == null ? "-" : MaterialSearchOverlay.ElementName(proxy.Element),
+                        __instance.target == null ? "null" : __instance.target.name));
+            }
+        }
+
+        /// <summary>
+        /// Feeds the arrow keys to the search dropdown and releases the camera's held
+        /// direction keys. This sits on TMP's own per frame selected-object update rather than
+        /// on its key handling because that handler returns the protected nested
+        /// <c>EditState</c>, which a prefix in this assembly cannot declare, so the press
+        /// cannot be swallowed before TMP sees it. A postfix needs nothing swallowed: the
+        /// arrow keys are unbound in the base game, the update runs only while the field is
+        /// focused, and it runs after TMP has moved the caret - which is exactly where the
+        /// caret has to be put back.
+        /// <para>
+        /// The prefix handles the camera: the game only clears the pan flags in its key up
+        /// handler, which a focused text box suppresses, so a direction pressed just before
+        /// clicking into the box would latch and the camera would keep sliding while the
+        /// player types and still be sliding after the overlay closes. Runs for every TMP
+        /// field, not only this mod's search box, because the latch is the game's and any
+        /// mod-built field can trigger it.
+        /// </para>
         /// </summary>
         [HarmonyPatch(typeof(TMP_InputField), "OnUpdateSelected")]
         public static class TMPInputField_OnUpdateSelected_Patch {
+            internal static void Prefix(TMP_InputField __instance) {
+                if (__instance != null && __instance.isFocused)
+                    CameraPan.ReleaseHeldKeys();
+            }
+
             internal static void Postfix(TMP_InputField __instance) {
                 OverlayLegend_OnSpawn_Patch.HandleNavigationKey(__instance);
+            }
+        }
+
+        /// <summary>
+        /// Makes a plain <see cref="TMP_InputField"/> count as "the player is typing" for the
+        /// camera. The game only recognises its own <c>KInputTextField</c> and the legacy UI
+        /// input field, but PLib - and this mod's search box - adds a bare TMP field, so the
+        /// camera would otherwise keep panning on movement keys pressed while typing and, worse,
+        /// miss the key up that should stop it. Treating any focused field as text entry stops
+        /// both at the source; the per frame release above cleans up a key that was already
+        /// down when the field took focus.
+        /// </summary>
+        [HarmonyPatch(typeof(CameraController), "WithinInputField")]
+        public static class CameraController_WithinInputField_Patch {
+            internal static bool Prefix(ref bool __result) {
+                var current = UnityEngine.EventSystems.EventSystem.current;
+                if (current == null)
+                    return true;
+                var selected = current.currentSelectedGameObject;
+                // Deactivating a field does not necessarily clear the EventSystem's selection,
+                // so a hidden box must not keep the camera locked out of its keys.
+                if (selected == null || !selected.activeInHierarchy)
+                    return true;
+                // Selection alone is not enough: a field can stay selected without the caret
+                // being in it, and the movement keys must keep working then.
+                var field = selected.GetComponent<TMP_InputField>();
+                if (field == null || !field.isFocused)
+                    return true;
+                __result = true;
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Refuses to unpause while a pinned result is on screen. The pause key, the pause
+        /// button and the play button all funnel through <c>TogglePause</c>, so one prefix
+        /// covers every way the player has of starting the simulation. The original is not
+        /// called at all, which matters: the pause count has to stay exactly one, because a
+        /// count of two would need two presses to resume once the overlay closes.
+        /// </summary>
+        [HarmonyPatch(typeof(SpeedControlScreen), "TogglePause", typeof(bool))]
+        public static class SpeedControlScreen_TogglePause_Patch {
+            internal static bool Prefix(KToggle ___pauseButton) {
+                if (!ForcedPause.BlocksUnpause)
+                    return true;
+                // A KToggle flips its own isOn before firing onClick, so clicking the pause
+                // button has already made it look unpaused by the time this runs. Put the
+                // visual state back; the pause itself was never released.
+                if (___pauseButton != null && !___pauseButton.isOn)
+                    ___pauseButton.isOn = true;
+                Log.Debug("TogglePause blocked: a search result is pinned");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Refuses every direct unpause as well. Several systems - the cinema camera, screens
+        /// closing, other mods - release the pause without going through
+        /// <c>TogglePause</c>, and the per frame guard would only undo those a frame later.
+        /// Blocking here keeps the pause count at exactly one, so the player still needs a
+        /// single press to resume after the overlay closes.
+        /// </summary>
+        [HarmonyPatch(typeof(SpeedControlScreen), "Unpause", typeof(bool))]
+        public static class SpeedControlScreen_Unpause_Patch {
+            internal static bool Prefix() {
+                if (!ForcedPause.BlocksUnpause)
+                    return true;
+                Log.Debug("Unpause blocked: a search result is pinned");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Drops the pause guard when the speed screen itself is torn down (load, quit to menu).
+        /// The pause count belongs to the world that is going away and must not be carried into
+        /// the next one.
+        /// </summary>
+        [HarmonyPatch(typeof(SpeedControlScreen), "OnForcedCleanUp")]
+        public static class SpeedControlScreen_OnForcedCleanUp_Patch {
+            internal static void Postfix() {
+                ForcedPause.Reset();
+                MatchLocationUI.Hide();
             }
         }
     }

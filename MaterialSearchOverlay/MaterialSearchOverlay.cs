@@ -57,6 +57,19 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         private static SimHashes[] backwallMatches;
 
+        /// <summary>
+        /// The current per cell backwall match snapshot, for readers that need to turn it into
+        /// positions. Null before the first scan.
+        /// </summary>
+        internal static SimHashes[] BackwallSnapshot => backwallMatches;
+
+        /// <summary>
+        /// The last hover diagnostic line written. The hover card asks its filter questions
+        /// every frame, so the line is only written again when it actually changes.
+        /// Diagnostics only; safe to delete together with <see cref="LogHoverCell"/>.
+        /// </summary>
+        private static string hoverDiag;
+
         private static readonly Dictionary<SimHashes, float> BackwallMasses =
             new Dictionary<SimHashes, float>();
 
@@ -64,6 +77,12 @@ namespace BobbyModding.MaterialSearchOverlay {
             new Dictionary<GameObject, Color>();
 
         private readonly List<KMonoBehaviour> layerTargets = new List<KMonoBehaviour>();
+
+        /// <summary>
+        /// The entities the current search lit up, in the order the highlighter found them.
+        /// The position list turns these into rows; it only reads the set, never changes it.
+        /// </summary>
+        internal List<KMonoBehaviour> Targets => layerTargets;
 
         /// <summary>
         /// Scratch set handed to the game's per-frame highlight pass. Since U60 that helper
@@ -97,9 +116,11 @@ namespace BobbyModding.MaterialSearchOverlay {
             // rather than trusting to be handed back the exact instance that matched.
             highlightConditions = new OverlayModes.ColorHighlightCondition[] {
                 new OverlayModes.ColorHighlightCondition(
-                    kmb => kmb != null && targetColors.TryGetValue(kmb.gameObject, out var color)
-                        ? color : Color.clear,
-                    kmb => kmb != null && targetColors.ContainsKey(kmb.gameObject))
+                    kmb => kmb != null && !LocationSelection.IsTargetHidden(kmb.gameObject) &&
+                        targetColors.TryGetValue(kmb.gameObject, out var color) ? color :
+                        Color.clear,
+                    kmb => kmb != null && !LocationSelection.IsTargetHidden(kmb.gameObject) &&
+                        targetColors.ContainsKey(kmb.gameObject))
             };
             Instance = this;
             Log.Debug("MaterialSearchOverlay: instance created ID={0}".F(ID));
@@ -117,7 +138,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (element == null)
                 return NON_MATCHING_COLOR;
             if (matches.Elements.Contains(element.id) &&
-                    ElementColors.TryGetValue(element.id, out var color))
+                    ElementColors.TryGetValue(element.id, out var color) &&
+                    LocationSelection.IsTileVisible(cell))
                 return color;
             return GetBackwallColor(cell);
         }
@@ -132,7 +154,7 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (match == null || (uint)cell >= (uint)match.Length)
                 return NON_MATCHING_COLOR;
             var id = match[cell];
-            if (id == default)
+            if (id == default || !LocationSelection.IsBackwallVisible(cell))
                 return NON_MATCHING_COLOR;
             return ElementColors.TryGetValue(id, out var color) ? color :
                 NON_MATCHING_COLOR;
@@ -159,26 +181,140 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
-        /// Whether the per cell element block belongs in the tooltip, asked by the game through
-        /// the hover card's overlay filter map. Only when the cell's own element matched, so
-        /// searching for a creature does not also explain the oxygen it is sitting in. A
-        /// matching natural backwall counts as well, because the cell block is where the game
-        /// labels it. Main thread only: it reads the live mouse cell.
+        /// The colour the overlay paints one highlighted entity in. The position list uses it
+        /// for its row swatch, so a row and the thing it points at on the map always agree.
+        /// False when the object is not in the current highlight set.
+        /// </summary>
+        internal bool TryGetTargetColor(GameObject go, out Color color) {
+            color = Color.white;
+            return go != null && targetColors.TryGetValue(go, out color);
+        }
+
+        /// <summary>
+        /// The cell the mouse is over right now, or -1 when it cannot be resolved (no camera,
+        /// cursor outside the grid). Main thread only: it reads the live mouse position.
+        /// </summary>
+        internal static int HoveredCell() {
+            var camera = Camera.main;
+            if (camera == null)
+                return -1;
+            int cell = Grid.PosToCell(camera.ScreenToWorldPoint(KInputManager.GetMousePos()));
+            return Grid.IsValidCell(cell) ? cell : -1;
+        }
+
+        /// <summary>
+        /// Whether the natural element of a cell matched the pinned search, the rule for the
+        /// game's own tile proxy: it follows only what it stands for, so a matching tile no
+        /// longer makes the backwall behind it clickable as well. An unreadable cell keeps the
+        /// proxy - the rule must not hide what it cannot read.
+        /// </summary>
+        internal static bool TileMatchedAtCell(int cell) {
+            if (cell < 0)
+                return true;
+            var matches = Instance?.Matches;
+            if (matches == null)
+                return true;
+            var element = Grid.Element[cell];
+            return element != null && matches.Elements.Contains(element.id);
+        }
+
+        /// <summary>
+        /// Whether the cell's natural backwall matched the pinned search, the rule for the
+        /// game's own backwall proxy. Unlike the tile rule this one gives up on an unreadable
+        /// cell: there is no backwall to select there, so nothing argues for keeping it.
+        /// </summary>
+        internal static bool BackwallMatchedAtCell(int cell) {
+            return HasMatchingBackwall(cell);
+        }
+
+        /// <summary>
+        /// Whether the cell's element half is switched on for the tooltip: the natural element
+        /// matched the search and its row in the position list is still checked. A null mask
+        /// means the search was never trimmed by the list, so a match stands on its own.
+        /// </summary>
+        internal static bool TileSelectedAtCell(int cell) {
+            return TileMatchedAtCell(cell) && LocationSelection.IsTileVisible(cell);
+        }
+
+        /// <summary>
+        /// Whether the cell's natural backwall half is switched on for the tooltip: the backwall
+        /// matched and its row in the position list is still checked.
+        /// </summary>
+        internal static bool BackwallSelectedAtCell(int cell) {
+            return BackwallMatchedAtCell(cell) && LocationSelection.IsBackwallVisible(cell);
+        }
+
+        /// <summary>
+        /// Whether the per cell element block belongs in the tooltip at all, asked by the game
+        /// through the hover card's overlay filter map. Only when one of the cell's two halves
+        /// is switched on for the tooltip: the tile rule is <see cref="TileSelectedAtCell"/> and
+        /// the backwall rule is <see cref="BackwallSelectedAtCell"/>, so searching for a
+        /// creature no longer explains the cell it is sitting in, and unchecking a half in the
+        /// position list hides it from the tooltip as well as from the map. Inside the block the
+        /// two halves then each get their own hiding, by the drawer patches. Main thread only:
+        /// it reads the live mouse cell.
         /// </summary>
         internal static bool ShouldShowHoverCell() {
             var overlay = Instance;
             if (overlay == null || !overlay.HoverFilterActive)
                 return true;
-            var camera = Camera.main;
-            if (camera == null)
-                return true;
-            int cell = Grid.PosToCell(camera.ScreenToWorldPoint(KInputManager.GetMousePos()));
-            if (!Grid.IsValidCell(cell))
-                return true;
-            var element = Grid.Element[cell];
-            if (element != null && overlay.Matches.Elements.Contains(element.id))
-                return true;
-            return HasMatchingBackwall(cell);
+            int cell = HoveredCell();
+            LogHoverCell(cell);
+            return TileSelectedAtCell(cell) || BackwallSelectedAtCell(cell);
+        }
+
+        /// <summary>
+        /// Writes one line describing what the hover, click and panel code see at a cell: its
+        /// coordinates, the element in front of it, the natural backwall behind it, whether
+        /// each of the two halves matched the pinned search and whether its row in the
+        /// position list is still checked, and what the filters make of that. Only the change
+        /// is written, because the hover card asks its filter questions every frame.
+        /// Diagnostics only.
+        /// </summary>
+        internal static void LogHoverCell(int cell) {
+            string line;
+            if (!Grid.IsValidCell(cell)) {
+                line = "Hover diag: no valid cell under the mouse";
+            } else {
+                var coords = Grid.CellToXY(cell);
+                var tile = Grid.Element[cell];
+                var backwall = BackwallManager.HasBackwall(cell) ?
+                    BackwallManager.At(cell).Element : null;
+                bool tileMatched = TileMatchedAtCell(cell);
+                bool tileKept = TileSelectedAtCell(cell);
+                bool backwallMatched = BackwallMatchedAtCell(cell);
+                bool backwallKept = BackwallSelectedAtCell(cell);
+                line = "Hover diag: cell={0} ({1},{2}) tile={3} matched={4} kept={5} | ".
+                    F(cell, coords.x, coords.y, ElementName(tile), tileMatched, tileKept) +
+                    "backwall={0} matched={1} kept={2} | showCell={3}".F(
+                        backwall == null ? "none" : ElementName(backwall),
+                        backwallMatched, backwallKept, tileKept || backwallKept);
+            }
+            if (line != hoverDiag) {
+                hoverDiag = line;
+                Log.Debug(line);
+            }
+        }
+
+        /// <summary>
+        /// The display name of an element, for the diagnostics. Null safe: cells without a
+        /// readable element (and cells without a backwall) report "null"/"none" instead.
+        /// Diagnostics only.
+        /// </summary>
+        internal static string ElementName(Element element) {
+            return element == null ? "null" : element.name + " (" + element.id + ")";
+        }
+
+        /// <summary>
+        /// The display names of a set of elements, for the diagnostics. Diagnostics only.
+        /// </summary>
+        internal static string ElementListText(HashSet<SimHashes> ids) {
+            if (ids == null || ids.Count == 0)
+                return "";
+            var names = new List<string>(ids.Count);
+            foreach (var id in ids)
+                names.Add(ElementName(ElementLoader.FindElementByHash(id)));
+            return string.Join(", ", names.ToArray());
         }
 
         /// <summary>True when the natural backwall at this cell matched the current search.</summary>
@@ -201,9 +337,10 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         /// <remarks>
         /// A cell counts as visible natural backwall when it belongs to the active world, has
-        /// been revealed, is not covered by a solid tile, and the sim reports a solid backwall
-        /// whose element is in the match set. This mirrors the vanilla check used by the dig
-        /// tool (WorldDamage.GetApproximateDigTime). Must run on the main thread:
+        /// been revealed, and the sim reports a solid backwall whose element is in the match
+        /// set. A solid tile in front of it does not disqualify the cell: the game still shows
+        /// that backwall, and the overlay paints over the tile anyway, so the player can plan
+        /// where to dig rather than only after digging. Must run on the main thread:
         /// BackwallManager points into native sim memory that is nulled out during world loads.
         /// </remarks>
         internal static void RefreshBackwallData(HashSet<SimHashes> matchingElements) {
@@ -218,9 +355,6 @@ namespace BobbyModding.MaterialSearchOverlay {
                 if (!Grid.IsActiveWorld(cell))
                     continue;
                 if (Grid.Visible[cell] <= 20)
-                    continue;
-                // A solid tile covers the backwall behind it, so it is not visible
-                if (Grid.Solid[cell])
                     continue;
                 if (!BackwallManager.HasBackwall(cell))
                     continue;
@@ -261,6 +395,13 @@ namespace BobbyModding.MaterialSearchOverlay {
             // null, which makes the game's DLC filter reject every prefab. First open of the
             // overlay is the earliest point they can be read.
             SearchIndex.EnsureWorldBuilt();
+            // A fresh open starts with no pinned result: any pause left over from a previous
+            // session must not keep refusing unpause until the player picks something again.
+            ForcedPause.Reset();
+            MatchLocationUI.Hide();
+            // A direction key latched in an earlier session would keep the camera sliding
+            // under the list until the next key press, so start from a clean pan state.
+            CameraPan.ReleaseHeldKeys();
             if (Patches.SearchField != null) {
                 Patches.SearchField.SetActive(true);
                 Log.Debug("Enable: SearchField set active");
@@ -277,12 +418,20 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (SelectTool.Instance != null)
                 SelectTool.Instance.ClearLayerMask();
             if (Patches.SearchField != null) {
+                // Give the keyboard back before hiding the box: a field that is merely
+                // deactivated can stay as the EventSystem's selection, and the camera would
+                // then treat every movement key as "typing" for the rest of the session.
+                Patches.DeselectSearchField();
                 Patches.SearchField.SetActive(false);
                 // The query has just been dropped from the match set, so the box must not
                 // keep showing it: an auto-focused reopen would otherwise list rows for a
                 // search that is no longer lit up on the map.
                 Patches.ClearSearchField();
             }
+            // The per frame release stops once the box loses focus, so a key that was still
+            // held when the overlay closes has to be let go here: otherwise the camera keeps
+            // panning after the map is back and the overlay is gone.
+            CameraPan.ReleaseHeldKeys();
             if (Patches.DropdownContainer != null) {
                 Patches.DropdownContainer.SetActive(false);
                 Log.Debug("Disable: DropdownContainer set inactive");
@@ -295,6 +444,15 @@ namespace BobbyModding.MaterialSearchOverlay {
             SelectedEntry = null;
             SearchText = null;
             RefreshBackwallData(null);
+            // A row click may have left the game selecting one of our targets and its
+            // info panel open; switching the overlay off closes that panel, while a
+            // selection the player made themselves is left alone.
+            MatchLocationCollector.CloseInfoPanel();
+            // The list is a snapshot of a pinned selection, so it goes with the selection. The
+            // pause it caused stays behind on purpose: the player can look around after closing
+            // and resume with the normal pause key.
+            MatchLocationUI.Hide();
+            ForcedPause.End();
             base.Disable();
             Log.Debug("Disable: complete");
         }
@@ -323,6 +481,9 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// afterwards needs a new search or selection to appear.
         /// </summary>
         internal void RefreshHighlights() {
+            // Whatever list is on screen belongs to the previous selection; a new query
+            // invalidates it even before the new results are known.
+            MatchLocationUI.Hide();
             Matches = SelectedEntry != null ?
                 SearchMatches.FromSelection(SelectedEntry) :
                 SearchMatches.FromQuery(SearchText);
@@ -333,6 +494,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             Log.Debug("RefreshHighlights: {0} elements, {1} entities (select={2}, text='{3}')".
                 F(Matches.Elements.Count, layerTargets.Count,
                     SelectedEntry?.DisplayName ?? "none", SearchText ?? "null"));
+            Log.Debug("Match set diag: elements=[{0}] highlighted={1}".F(
+                ElementListText(Matches.Elements), layerTargets.Count));
         }
 
         /// <summary>
@@ -355,12 +518,19 @@ namespace BobbyModding.MaterialSearchOverlay {
             foreach (var go in colors.Keys)
                 if (!ReferenceEquals(go, null) && go == null)
                     deadColorKeys.Add(go);
-            for (int i = 0; i < deadColorKeys.Count; i++)
-                colors.Remove(deadColorKeys[i]);
+            for (int i = 0; i < deadColorKeys.Count; i++) {
+                var key = deadColorKeys[i];
+                SearchHighlighter.ForgetTarget(key);
+                colors.Remove(key);
+            }
         }
 
         public override void Update() {
             base.Update();
+            // Runs before the entity upkeep below, which is skipped while the search is empty:
+            // the pause has to be held for as long as the overlay is open, not only while
+            // there are highlights to draw.
+            ForcedPause.Guard();
             if (Matches == null || Matches.IsEmpty)
                 return;
             if (layerTargets.Count == 0)
@@ -369,9 +539,14 @@ namespace BobbyModding.MaterialSearchOverlay {
             Grid.GetVisibleExtents(out var min, out var max);
             frameTargets.Clear();
             frameTargets.Add(layerTargets);
+            // Conditional, not Constant: an entity the position list has unticked is still a
+            // target here so it can be ticked again without a rescan, but it must go back to
+            // the normal layer. Objects on the highlight layer are drawn in their own colours
+            // by the overlay view, so leaving an unticked one there made it show its real
+            // colour instead of the grey everything unhighlighted gets.
             RemoveOffscreenAndUpdateHighlights(min, max, frameTargets,
                 highlightConditions,
-                OverlayModes.BringToFrontLayerSetting.Constant, targetLayer);
+                OverlayModes.BringToFrontLayerSetting.Conditional, targetLayer);
         }
 
         public override List<LegendEntry> GetCustomLegendData() {
