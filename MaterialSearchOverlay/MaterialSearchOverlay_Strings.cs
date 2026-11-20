@@ -124,6 +124,22 @@ namespace BobbyModding.MaterialSearchOverlay {
                     public static LocString LOCATION_EMPTY = "Nothing found in this world";
 
                     /// <summary>
+                    /// The two box tools above the position list. They act on the rows below
+                    /// them: a drag over the map ticks, or unticks, every matching row whose
+                    /// cells the box covers, which is why they only appear once a result is
+                    /// pinned.
+                    /// </summary>
+                    public static LocString AREA_ADD = "Add area";
+
+                    public static LocString AREA_REMOVE = "Remove area";
+
+                    public static LocString AREA_ADD_TOOLTIP =
+                        "Drag a box over the map to select the matching cells, buildings and items inside it";
+
+                    public static LocString AREA_REMOVE_TOOLTIP =
+                        "Drag a box over the map to deselect the matching cells, buildings and items inside it";
+
+                    /// <summary>
                     /// One label per searchable kind, shown as a badge on dropdown rows so a
                     /// name that matches several kinds ("Fish" as food and as creature) can be
                     /// told apart. {0} is the count for that kind.

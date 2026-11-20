@@ -128,6 +128,37 @@ namespace BobbyModding.MaterialSearchOverlay {
         private static readonly Dictionary<MatchLocationSource, float> scrollOffsets =
             new Dictionary<MatchLocationSource, float>();
 
+        /// <summary>
+        /// Which area row and which tile of it sits on each grid cell, for the map side of the
+        /// list. Tiles and backwalls are separate maps because one cell can hold both; a cell
+        /// belongs to at most one connected area per kind.
+        /// </summary>
+        private static readonly Dictionary<int, AreaCell> tileCells =
+            new Dictionary<int, AreaCell>();
+
+        private static readonly Dictionary<int, AreaCell> backwallCells =
+            new Dictionary<int, AreaCell>();
+
+        /// <summary>
+        /// The item rows standing on each grid cell. A building occupies several cells and
+        /// two piles of debris can share one, so a cell maps to a list.
+        /// </summary>
+        private static readonly Dictionary<int, List<MatchLocation>> itemCells =
+            new Dictionary<int, List<MatchLocation>>();
+
+        /// <summary>One tile of an area row, as the cell index stores it.</summary>
+        private struct AreaCell {
+            internal readonly MatchLocation Area;
+
+            /// <summary>Index into <see cref="MatchLocation.Cells"/>.</summary>
+            internal readonly int Index;
+
+            internal AreaCell(MatchLocation area, int index) {
+                Area = area;
+                Index = index;
+            }
+        }
+
         /// <summary>How many rows each section shows before it scrolls, from the options page.</summary>
         private static int visibleRows = DEFAULT_VISIBLE_ROWS;
 
@@ -179,6 +210,10 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// selection showed and resets every expansion, collapse, scroll and check box.
         /// </summary>
         internal static void Show(List<MatchLocation> found) {
+            // A new pin always starts on the list side: the previous search's box tool has
+            // nothing left to act on.
+            AreaDragTool.Disarm();
+            AreaDragBar.SetVisible(false);
             expandedAreas.Clear();
             collapsedGroups.Clear();
             collapsedSections.Clear();
@@ -202,7 +237,9 @@ namespace BobbyModding.MaterialSearchOverlay {
                 }
             }
             BuildSections();
+            BuildCellIndex();
             RecalculateSelectedTotals();
+            AreaDragBar.SetVisible(HasPinnedResult);
             if (panel == null) {
                 Log.Debug("MatchLocationUI: Show skipped, no list yet");
                 return;
@@ -220,6 +257,8 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// cells of a later search.
         /// </summary>
         internal static void Hide() {
+            AreaDragBar.SetVisible(false);
+            ClearCellIndex();
             bool active = panel != null && panel.activeSelf;
             if (leaves.Count == 0 && sections.Count == 0 && !active) {
                 LocationSelection.Clear();
@@ -941,6 +980,113 @@ namespace BobbyModding.MaterialSearchOverlay {
         }
 
         /// <summary>
+        /// Whether the list currently holds a pinned result, i.e. whether the area buttons
+        /// have anything to work on.
+        /// </summary>
+        internal static bool HasPinnedResult => leaves.Count > 0;
+
+        /// <summary>
+        /// Rebuilds the cell to row index the box tool looks cells up in. Areas map every one
+        /// of their tiles; items map the cell they stand on and, for a building, every cell it
+        /// occupies, so a box over a big machine ticks the machine and not just its corner.
+        /// </summary>
+        private static void BuildCellIndex() {
+            ClearCellIndex();
+            for (int i = 0; i < leaves.Count; i++) {
+                var leaf = leaves[i];
+                switch (leaf.Source) {
+                case MatchLocationSource.Tile:
+                case MatchLocationSource.Backwall:
+                    var cells = leaf.Cells;
+                    if (cells == null)
+                        break;
+                    var index = leaf.Source == MatchLocationSource.Tile ? tileCells :
+                        backwallCells;
+                    for (int j = 0; j < cells.Length; j++)
+                        index[cells[j]] = new AreaCell(leaf, j);
+                    break;
+                default:
+                    AddItemCell(leaf.Cell, leaf);
+                    var building = leaf.Target != null ? leaf.Target.GetComponent<Building>() :
+                        null;
+                    if (building != null) {
+                        var placement = building.PlacementCells;
+                        if (placement != null)
+                            for (int j = 0; j < placement.Length; j++)
+                                AddItemCell(placement[j], leaf);
+                    }
+                    break;
+                }
+            }
+            Log.Debug("MatchLocationUI: cell index {0} tiles, {1} backwall, {2} item cells".F(
+                tileCells.Count, backwallCells.Count, itemCells.Count));
+        }
+
+        private static void AddItemCell(int cell, MatchLocation leaf) {
+            if (!Grid.IsValidCell(cell))
+                return;
+            if (!itemCells.TryGetValue(cell, out var list)) {
+                list = new List<MatchLocation>(1);
+                itemCells[cell] = list;
+            }
+            if (!list.Contains(leaf))
+                list.Add(leaf);
+        }
+
+        private static void ClearCellIndex() {
+            tileCells.Clear();
+            backwallCells.Clear();
+            itemCells.Clear();
+        }
+
+        /// <summary>
+        /// Applies one box drag from the map to the rows of the pinned list: every matching
+        /// tile, backwall and item cell the box covered is ticked or unticked with the rest of
+        /// the rows. The whole drag is applied as a single edit, so the map and the columns
+        /// repaint once per box rather than once per cell.
+        /// </summary>
+        internal static bool ApplyDragSelection(ICollection<int> cells, bool select) {
+            if (cells == null || cells.Count == 0 || leaves.Count == 0)
+                return false;
+            bool changed = ApplyAreaCells(tileCells, cells, select);
+            if (ApplyAreaCells(backwallCells, cells, select))
+                changed = true;
+            if (itemCells.Count > 0) {
+                // One drag can cross several cells of the same building; the row may only be
+                // toggled once or the second visit would flip it straight back.
+                var touched = new HashSet<MatchLocation>();
+                foreach (int cell in cells) {
+                    if (!itemCells.TryGetValue(cell, out var items))
+                        continue;
+                    for (int i = 0; i < items.Count; i++) {
+                        var leaf = items[i];
+                        if (!touched.Add(leaf) || selected.Contains(leaf) == select)
+                            continue;
+                        SetLeafSelected(leaf, select);
+                        changed = true;
+                    }
+                }
+            }
+            if (changed)
+                CommitSelection();
+            return changed;
+        }
+
+        private static bool ApplyAreaCells(Dictionary<int, AreaCell> index,
+                ICollection<int> cells, bool select) {
+            bool changed = false;
+            foreach (int cell in cells) {
+                if (!index.TryGetValue(cell, out var entry))
+                    continue;
+                if (IsCellSelected(entry.Area, entry.Index) == select)
+                    continue;
+                SetCellSelected(entry.Area, entry.Index, select);
+                changed = true;
+            }
+            return changed;
+        }
+
+        /// <summary>
         /// Publishes the ticked rows to the map and refreshes the columns in place. Structural
         /// changes are not needed: the rows, their text and their totals are the same, only
         /// the highlight and the selected halves of the values change.
@@ -1323,7 +1469,10 @@ namespace BobbyModding.MaterialSearchOverlay {
             var handler = row.GetComponent<LocationRowEvents>();
             if (handler == null)
                 handler = row.AddComponent<LocationRowEvents>();
-            handler.OnClick = () => MatchLocationCollector.PanToCell(cell);
+            handler.OnClick = () => {
+                Log.Debug("Row click diag: pan only, cell={0}".F(cell));
+                MatchLocationCollector.PanToCell(cell);
+            };
         }
 
         /// <summary>
@@ -1339,6 +1488,7 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (handler == null)
                 handler = row.AddComponent<LocationRowEvents>();
             handler.OnClick = () => {
+                Log.Debug("Row click diag: cell row, cell={0} source={1}".F(cell, source));
                 MatchLocationCollector.PanToCell(cell);
                 MatchLocationCollector.OpenCellPanel(cell, source);
             };
@@ -1354,6 +1504,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (handler == null)
                 handler = row.AddComponent<LocationRowEvents>();
             handler.OnClick = () => {
+                Log.Debug("Row click diag: item row, cell={0} target={1}".F(cell,
+                    target == null ? "null" : target.name));
                 MatchLocationCollector.PanToCell(cell);
                 MatchLocationCollector.OpenItemPanel(target);
             };

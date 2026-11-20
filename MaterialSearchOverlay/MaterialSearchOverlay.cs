@@ -63,6 +63,13 @@ namespace BobbyModding.MaterialSearchOverlay {
         /// </summary>
         internal static SimHashes[] BackwallSnapshot => backwallMatches;
 
+        /// <summary>
+        /// The last hover diagnostic line written. The hover card asks its filter questions
+        /// every frame, so the line is only written again when it actually changes.
+        /// Diagnostics only; safe to delete together with <see cref="LogHoverCell"/>.
+        /// </summary>
+        private static string hoverDiag;
+
         private static readonly Dictionary<SimHashes, float> BackwallMasses =
             new Dictionary<SimHashes, float>();
 
@@ -252,7 +259,62 @@ namespace BobbyModding.MaterialSearchOverlay {
             if (overlay == null || !overlay.HoverFilterActive)
                 return true;
             int cell = HoveredCell();
+            LogHoverCell(cell);
             return TileSelectedAtCell(cell) || BackwallSelectedAtCell(cell);
+        }
+
+        /// <summary>
+        /// Writes one line describing what the hover, click and panel code see at a cell: its
+        /// coordinates, the element in front of it, the natural backwall behind it, whether
+        /// each of the two halves matched the pinned search and whether its row in the
+        /// position list is still checked, and what the filters make of that. Only the change
+        /// is written, because the hover card asks its filter questions every frame.
+        /// Diagnostics only.
+        /// </summary>
+        internal static void LogHoverCell(int cell) {
+            string line;
+            if (!Grid.IsValidCell(cell)) {
+                line = "Hover diag: no valid cell under the mouse";
+            } else {
+                var coords = Grid.CellToXY(cell);
+                var tile = Grid.Element[cell];
+                var backwall = BackwallManager.HasBackwall(cell) ?
+                    BackwallManager.At(cell).Element : null;
+                bool tileMatched = TileMatchedAtCell(cell);
+                bool tileKept = TileSelectedAtCell(cell);
+                bool backwallMatched = BackwallMatchedAtCell(cell);
+                bool backwallKept = BackwallSelectedAtCell(cell);
+                line = "Hover diag: cell={0} ({1},{2}) tile={3} matched={4} kept={5} | ".
+                    F(cell, coords.x, coords.y, ElementName(tile), tileMatched, tileKept) +
+                    "backwall={0} matched={1} kept={2} | showCell={3}".F(
+                        backwall == null ? "none" : ElementName(backwall),
+                        backwallMatched, backwallKept, tileKept || backwallKept);
+            }
+            if (line != hoverDiag) {
+                hoverDiag = line;
+                Log.Debug(line);
+            }
+        }
+
+        /// <summary>
+        /// The display name of an element, for the diagnostics. Null safe: cells without a
+        /// readable element (and cells without a backwall) report "null"/"none" instead.
+        /// Diagnostics only.
+        /// </summary>
+        internal static string ElementName(Element element) {
+            return element == null ? "null" : element.name + " (" + element.id + ")";
+        }
+
+        /// <summary>
+        /// The display names of a set of elements, for the diagnostics. Diagnostics only.
+        /// </summary>
+        internal static string ElementListText(HashSet<SimHashes> ids) {
+            if (ids == null || ids.Count == 0)
+                return "";
+            var names = new List<string>(ids.Count);
+            foreach (var id in ids)
+                names.Add(ElementName(ElementLoader.FindElementByHash(id)));
+            return string.Join(", ", names.ToArray());
         }
 
         /// <summary>True when the natural backwall at this cell matched the current search.</summary>
@@ -432,6 +494,8 @@ namespace BobbyModding.MaterialSearchOverlay {
             Log.Debug("RefreshHighlights: {0} elements, {1} entities (select={2}, text='{3}')".
                 F(Matches.Elements.Count, layerTargets.Count,
                     SelectedEntry?.DisplayName ?? "none", SearchText ?? "null"));
+            Log.Debug("Match set diag: elements=[{0}] highlighted={1}".F(
+                ElementListText(Matches.Elements), layerTargets.Count));
         }
 
         /// <summary>

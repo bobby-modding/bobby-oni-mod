@@ -19,6 +19,7 @@ An Oxygen Not Included mod that lets you search the colony by name and highlight
 - **Scroll percentages** — every section header shows where its pane is scrolled (`{0}%` style: `100%` is the top, and a section that fits reads `100%`), and a scroll that has been left mid-way stays put while rows are expanded or collapsed
 - **Row check boxes** — every section, group, area, coordinate and item row carries a check box, and unticking one hides that place from the map highlight, all the way down to single tiles inside an expanded area. The box is tri-state — a hollow square is off, a filled square means everything under the row is on, a dot means only part of it is — and clicking a partly ticked box selects the rest rather than clearing it
 - **Value columns** — the mass and count columns always read `selected / total` (`1,000 kg / 5,400 kg`, `240 / 402`), so the numbers describe exactly the same selection the map is painting, section header down to single cell. Rows that stand for one thing show their own figure instead (`X 15 Y 15`, `2 kg`, `1 item`)
+- **Box selection** — two buttons above the position list, **Add area** and **Remove area**, arm a box tool for the map: drag a rectangle over the world and every matching tile, backwall, building or item inside it is ticked, or unticked, in the list at once. While the tool is armed its button is highlighted (green to add, red to remove), and the drag box and its `W x H` over `N tiles` readout carry the same colour. The tool stays armed for drag after drag, and clicking the highlighted button again, pressing `Esc`, picking another tool or closing the overlay puts the mouse back
 - **Camera clicks** — clicking any list row pans the camera to that spot without changing the zoom level; a row standing for exactly one cell or one object also makes the game select it, which opens the game's own info panel for that cell or object and keeps the panel until the overlay closes. A row standing for an area or a group has no single thing to select, so it only pans
 - **Pinned simulation** — selecting a result pauses the colony and refuses to unpause until the overlay is closed, via the pause key, the pause button, or the play button alike. That is what makes the position list trustworthy: tracked critters and duplicants cannot move, and items cannot be created or destroyed, while you read it. The game stays paused after the overlay closes, so you can look around; one press of the pause key then resumes
 - **Filtered hover tooltip** — while the overlay is active, hovering a cell lists only what the search matched; the cell's own element block appears only when that element matched too, so searching `hatch egg` does not also explain the oxygen the egg is sitting in
@@ -68,8 +69,9 @@ Subscribe on the Steam Workshop.
 4. The map is dimmed grey from the moment the overlay opens; every match then lights up in its own colour on top of that grey, so only the matches show colour
 5. A pinned result pauses the colony and fills in the position list below the counts. Only the sections that found something show — `Tile areas (N)`, `Backwall areas (N)`, `Debris (N)`, `Building (N)`, `Contents (N)`, `Entities (N)` — each with its own scroll pane, so the mouse wheel scrolls one section without moving the others. The percentage on a header is that section's scroll position, and its `1,000 kg / 5,400 kg` and `240 / 402` columns are its selected and total mass and count
 6. Work the list with the row controls: the triangle unfolds an area into its cells (up to 500, then `… and N more`), folds a section or a name group back away, and the check box unticks whatever it covers so the map highlight drops it. Click a row to pan the camera to that spot (the zoom stays put); rows standing for one cell or one object also open the game's info panel for it, and its actions work on the real thing
-7. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
-8. Click a cell to select the match directly; click again to step through the other matches in that cell
+7. To tick a lot of the map at once, click **Add area** (or **Remove area**) above the list and drag a box on the map. Every matching tile, natural backwall, building and loose item whose cells the box covers is ticked, or unticked, with the rest of the list — a building counts from any of its cells, not just its corner. The button stays highlighted while the tool is armed, so you can drag as many boxes as you like; click it again, press `Esc`, or pick another tool to go back to the normal select tool
+8. Hover a cell to see only the matches in it — everything else in that cell stays out of the tooltip
+9. Click a cell to select the match directly; click again to step through the other matches in that cell
 
 Closing the overlay clears the search field and empties the position list, so every time you open it the box is empty again. The colony stays paused after closing; press the pause key once to resume. Starting a new search, or clicking back into the search box, hides the list until the next result is pinned.
 
@@ -101,5 +103,5 @@ The mod DLL is auto-deployed to your ONI Dev mod folder. See the [root README](.
 |---|---|
 | **Static ID** | `materialsearchoverlay` |
 | **API Version** | 2 |
-| **Mod version** | 2.3.0 |
+| **Mod version** | 2.4.0 |
 | **Minimum build** | 763023 |

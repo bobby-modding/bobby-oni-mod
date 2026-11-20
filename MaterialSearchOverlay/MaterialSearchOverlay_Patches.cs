@@ -397,6 +397,11 @@ namespace BobbyModding.MaterialSearchOverlay {
                 MassLabel = massLabelObj;
                 Log.Debug("Postfix: MassLabel built");
 
+                // Below the result label and above the dropdown, and hidden until a result is
+                // pinned, because the buttons act on the position list.
+                AreaDragBar.Build(__instance.transform);
+                Log.Debug("Postfix: area drag bar built");
+
                 var labelPanel = new PPanel("DropdownItems") {
                     Direction = PanelDirection.Vertical,
                     FlexSize = new Vector2(1, 0),
@@ -1285,10 +1290,80 @@ namespace BobbyModding.MaterialSearchOverlay {
                         OverlayScreen.Instance == null ||
                         OverlayScreen.Instance.GetMode() != MaterialSearchOverlay.ID)
                     return;
+                var vanilla = __result;
                 __result = Pick(___intersections, cycleSelection, previous_selection, overlay);
                 if (cycleSelection && __result == null &&
                         TryDirectBackwallSelect(previous_selection, overlay))
                     __result = (KSelectable)previous_selection;
+                DiagPick(cycleSelection, ___intersections, previous_selection, vanilla, __result,
+                    overlay);
+            }
+
+            /// <summary>
+            /// One line per click, telling what the game would have picked, what the filter
+            /// picked instead, and every candidate under the cursor with its keep verdict, plus
+            /// the state of the hovered cell. Hover picks are only written when the pick or the
+            /// cell changes, since this runs once per frame. Diagnostics only.
+            /// </summary>
+            private static void DiagPick(bool cycleSelection,
+                    List<InterfaceTool.Intersection> intersections, Component previous,
+                    KSelectable vanilla, KSelectable picked, MaterialSearchOverlay overlay) {
+                int hovered = MaterialSearchOverlay.HoveredCell();
+                if (cycleSelection) {
+                    MaterialSearchOverlay.LogHoverCell(hovered);
+                    bool tileKept = MaterialSearchOverlay.TileSelectedAtCell(hovered);
+                    bool backwallKept = MaterialSearchOverlay.BackwallSelectedAtCell(hovered);
+                    Log.Debug("Click pick diag: cell={0} previous={1} vanilla={2} picked={3} | candidates: {4}".
+                        F(hovered, Describe(previous), Describe(vanilla), Describe(picked),
+                            Candidates(intersections, overlay, tileKept, backwallKept)));
+                    return;
+                }
+                if (picked == lastHoverPick && hovered == lastHoverCell)
+                    return;
+                lastHoverPick = picked;
+                lastHoverCell = hovered;
+                Log.Debug("Hover pick diag: cell={0} vanilla={1} picked={2}".F(hovered,
+                    Describe(vanilla), Describe(picked)));
+            }
+
+            private static KSelectable lastHoverPick;
+
+            private static int lastHoverCell = -2;
+
+            /// <summary>
+            /// Names one candidate and what it is: the game's tile proxy, its backwall proxy,
+            /// or an ordinary selectable. Diagnostics only.
+            /// </summary>
+            private static string Describe(Component component) {
+                if (component == null)
+                    return "null";
+                var selectable = component as KSelectable;
+                if (selectable == null)
+                    return component.name;
+                if (component.GetComponent<CellSelectionObject>() != null)
+                    return component.name + " (tile proxy)";
+                if (component.GetComponent<BackwallSelectionObject>() != null)
+                    return component.name + " (backwall proxy)";
+                return component.name + " (" + selectable.GetName() + ")";
+            }
+
+            /// <summary>
+            /// Every candidate in the game's own order, each tagged with the filter's verdict,
+            /// so a proxy that should have been dropped is visible. Diagnostics only.
+            /// </summary>
+            private static string Candidates(List<InterfaceTool.Intersection> intersections,
+                    MaterialSearchOverlay overlay, bool tileKept, bool backwallKept) {
+                if (intersections == null || intersections.Count == 0)
+                    return "none";
+                var text = new System.Text.StringBuilder();
+                for (int i = 0; i < intersections.Count; i++) {
+                    var component = intersections[i].component;
+                    if (i > 0)
+                        text.Append(" ; ");
+                    text.Append(Describe(component)).Append(ShouldKeep(component as KSelectable,
+                        overlay, tileKept, backwallKept) ? " KEEP" : " drop");
+                }
+                return text.ToString();
             }
 
             /// <summary>
@@ -1410,6 +1485,172 @@ namespace BobbyModding.MaterialSearchOverlay {
                 if (selectable.GetComponent<BackwallSelectionObject>() != null)
                     return backwallKept;
                 return overlay.ShouldShowHoverEntry(selectable);
+            }
+        }
+
+        /// <summary>
+        /// Diagnostics only: writes every selection the game makes through the select tool,
+        /// whoever asked for it, so a row click can be followed through to the panel the game
+        /// ends up showing. Safe to delete.
+        /// </summary>
+        [HarmonyPatch(typeof(SelectTool), nameof(SelectTool.Select))]
+        public static class SelectTool_Select_Diag_Patch {
+            internal static void Postfix(SelectTool __instance, KSelectable new_selected,
+                    bool skipSound) {
+                Log.Debug("SelectTool.Select diag: requested={0} skipSound={1} -> selected={2}".
+                    F(new_selected == null ? "null" : new_selected.name, skipSound,
+                        __instance.selected == null ? "null" : __instance.selected.name));
+            }
+        }
+
+        /// <summary>
+        /// Plays the very sound vanilla's own sound block plays after a selection: the single
+        /// click when the tooltip stood for one thing, the parameterised cycling click (with
+        /// the same index vanilla would have used) when it offered several. Used where vanilla
+        /// stays silent but the player did click something: the repeated backwall click on the
+        /// same proxy, which vanilla's "already selected" guard swallows before its sound
+        /// block, and a list row that re-opens the panel of the thing it already selected.
+        /// </summary>
+        internal static void PlaySelectClick(SelectToolHoverTextCard card) {
+            int count = card == null ? 0 : card.recentNumberOfDisplayedSelectables;
+            if (count > 1) {
+                int index = (card.currentSelectedSelectableIndex + 1) % count;
+                KFMOD.PlayUISoundWithParameter(GlobalAssets.GetSound("Select_full"),
+                    "selection", index);
+            } else {
+                KFMOD.PlayUISound(GlobalAssets.GetSound("Select_empty"));
+            }
+        }
+
+        /// <summary>
+        /// Gives a backwall cell click the click sound vanilla leaves out. The backwall proxy is
+        /// one object for the whole map, so the step from one backwall cell to the next asks the
+        /// tool for the object it already holds: <see cref="SelectTool.Select"/> returns at its
+        /// "already selected" guard before its sound block, and the first click on a
+        /// backwall-only cell finds an empty tooltip and is treated as "nothing to click".
+        /// Both shapes are exactly "vanilla did not play", which is the only case patched here,
+        /// so a click that vanilla already sounded never gets a second sound.
+        /// </summary>
+        [HarmonyPatch(typeof(SelectTool), nameof(SelectTool.Select))]
+        public static class SelectTool_Select_BackwallClickSound_Patch {
+            internal static void Prefix(SelectTool __instance, out KSelectable __state) {
+                __state = __instance.selected;
+            }
+
+            internal static void Postfix(SelectTool __instance, KSelectable new_selected,
+                    bool skipSound, KSelectable __state) {
+                // skipSound is the overlay's own selections: row clicks ask for silence only
+                // when the row stands for no single thing, and a panel refresh changes nothing.
+                if (skipSound || new_selected == null)
+                    return;
+                if (__instance.selected != new_selected)
+                    return;
+                if (new_selected.GetComponent<BackwallSelectionObject>() == null)
+                    return;
+                var card = __instance.GetComponent<SelectToolHoverTextCard>();
+                bool vanillaSilent = __state == new_selected || card == null ||
+                    card.recentNumberOfDisplayedSelectables == 0;
+                Log.Debug("Backwall click sound diag: previous={0} selected={1} count={2} ".
+                    F(__state == null ? "null" : __state.name, new_selected.name,
+                        card == null ? -1 : card.recentNumberOfDisplayedSelectables) +
+                    "index={0} skipSound={1} vanillaSilent={2}".F(
+                        card == null ? -1 : card.currentSelectedSelectableIndex, skipSound,
+                        vanillaSilent));
+                if (vanillaSilent)
+                    PlaySelectClick(card);
+            }
+        }
+
+        /// <summary>
+        /// Gives the backwall proxy the two visual marks vanilla leaves off it: the shared
+        /// bobbing selection marker (its KSelectable is built with DisableSelectMarker) and the
+        /// cell-sized frame a selected tile shows (it has no SelectedDisplaySprite of its own).
+        /// Both are the game's own: turning the flag off makes SelectTool.Select position and
+        /// enable its marker exactly as for a tile, and the frame is a copy of the live tile
+        /// proxy's SelectedDisplaySprite switched to its Sprite_Selected.
+        /// </summary>
+        [HarmonyPatch(typeof(BackwallSelectionObject), "OnSpawn")]
+        public static class BackwallSelectionObject_OnSpawn_Marker_Patch {
+            internal static void Postfix(BackwallSelectionObject __instance) {
+                var selectable = __instance.GetComponent<KSelectable>();
+                if (selectable == null)
+                    return;
+                selectable.DisableSelectMarker = false;
+                var frame = __instance.gameObject.GetComponent<BackwallSelectionFrame>();
+                if (frame == null)
+                    frame = __instance.gameObject.AddComponent<BackwallSelectionFrame>();
+                frame.Init(selectable);
+                Log.Debug("Backwall marker diag: chevron=on frame={0}".F(
+                    frame.HasFrame ? "built" : "pending"));
+            }
+        }
+
+        /// <summary>
+        /// Keeps a copy of the tile selection frame under the backwall proxy and shows it only
+        /// while the proxy is the game's selection, with the same conditions the game uses for
+        /// a tile (default tool, UI visible). It lives on the proxy because a component cannot
+        /// switch its own GameObject back on after hide, and it retries the copy on later
+        /// frames in case the game built the backwall proxy before its tile proxies.
+        /// </summary>
+        internal sealed class BackwallSelectionFrame : MonoBehaviour {
+            private const float FRAME_SCALE = 25f / 64f;
+
+            private KSelectable owner;
+
+            private GameObject frame;
+
+            internal bool HasFrame => frame != null;
+
+            internal void Init(KSelectable selectable) {
+                owner = selectable;
+            }
+
+            private void LateUpdate() {
+                if (frame == null && !TryBuild())
+                    return;
+                bool show = owner != null && SelectTool.Instance != null &&
+                    SelectTool.Instance.selected == owner && PlayerController.Instance != null &&
+                    PlayerController.Instance.IsUsingDefaultTool() && !DebugHandler.HideUI;
+                if (frame.activeSelf != show)
+                    frame.SetActive(show);
+            }
+
+            /// <summary>
+            /// Copies the tile proxy's frame so sprite, sorting layer, order, local position and
+            /// pivot all match what the game shows around a selected tile.
+            /// </summary>
+            private bool TryBuild() {
+                var go = GameObject.Find("WorldSelectionCollider");
+                var tile = go == null ? null : go.GetComponent<CellSelectionObject>();
+                if (tile == null || tile.SelectedDisplaySprite == null ||
+                        tile.SelectedDisplaySprite.GetComponent<SpriteRenderer>() == null)
+                    return false;
+                frame = UnityEngine.Object.Instantiate(tile.SelectedDisplaySprite, transform,
+                    false);
+                frame.name = "Backwall Selection Display";
+                frame.transform.localScale = Vector3.one * FRAME_SCALE;
+                frame.GetComponent<SpriteRenderer>().sprite = tile.Sprite_Selected;
+                frame.SetActive(false);
+                Log.Debug("Backwall marker diag: frame built from {0}".F(tile.name));
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Diagnostics only: writes which object the details panel is being pointed at and what
+        /// that object reports as its element, which is exactly what the panel will title
+        /// itself with. This is the line that tells whether the panel was pointed at the tile
+        /// proxy or at the backwall proxy. Safe to delete.
+        /// </summary>
+        [HarmonyPatch(typeof(DetailsScreen), nameof(DetailsScreen.Refresh), typeof(GameObject))]
+        public static class DetailsScreen_Refresh_Diag_Patch {
+            internal static void Prefix(DetailsScreen __instance, GameObject go) {
+                var proxy = go == null ? null : go.GetComponent<ICellSelectionProxy>();
+                Log.Debug("DetailsScreen.Refresh diag: go={0} proxy={1} element={2} previousTarget={3}".
+                    F(go == null ? "null" : go.name,
+                        proxy == null ? "none (KPrefabID object?)" : proxy.GetType().Name,
+                        proxy == null ? "-" : MaterialSearchOverlay.ElementName(proxy.Element),
+                        __instance.target == null ? "null" : __instance.target.name));
             }
         }
 

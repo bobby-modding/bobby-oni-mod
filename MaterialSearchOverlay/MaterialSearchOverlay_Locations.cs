@@ -531,28 +531,55 @@ namespace BobbyModding.MaterialSearchOverlay {
                 return;
             var proxy = source == MatchLocationSource.Backwall ?
                 BackwallSelectionObject.Instance?.gameObject : FindTileProxy();
-            if (proxy == null)
+            if (proxy == null) {
+                Log.Debug("OpenCellPanel diag: cell={0} source={1} proxy=none (nothing to select)".
+                    F(cell, source));
                 return;
+            }
+            var before = SelectTool.Instance.selected;
+            if (source != MatchLocationSource.Backwall && before != null &&
+                    before.GetComponent<BackwallSelectionObject>() != null) {
+                // The backwall proxy is the one the game would pick for a cell that also has a
+                // backwall; a tile row must take the panel back onto the tile, so the backwall
+                // never keeps it.
+                Log.Debug("OpenCellPanel diag: tile row while the backwall proxy was selected");
+            }
             var sel = proxy.GetComponent<KSelectable>();
-            if (sel == null)
+            if (sel == null) {
+                Log.Debug("OpenCellPanel diag: proxy={0} has no selectable".F(proxy.name));
                 return;
+            }
             // Park it on the cell before selecting it: the proxy reads the cell out of
             // its own position, and the selection message makes it adopt that spot.
             var centre = Grid.CellToPosCCC(cell, Grid.SceneLayer.Move);
             var transform = proxy.transform;
             transform.position = new Vector3(centre.x, centre.y, transform.position.z);
             var current = SelectTool.Instance.selected;
-            // Asking for the selection that is already in place changes nothing, so
-            // that one is refreshed by hand instead: the panel is already open for it.
+            // Rows that stand for one thing use the game's own selection, and with it the
+            // game's own click sound. Asking for the selection that is already in place
+            // changes nothing, so that one is refreshed - and clicked - by hand instead.
             if (current != sel)
-                SelectTool.Instance.Select(sel, skipSound: true);
-            if (SelectTool.Instance.selected != sel)
+                SelectTool.Instance.Select(sel);
+            if (SelectTool.Instance.selected != sel) {
+                Log.Debug("OpenCellPanel diag: cell={0} source={1} selection failed".F(cell, source));
                 return;
+            }
             panelTarget = proxy;
-            if (current == sel && DetailsScreen.Instance != null)
-                DetailsScreen.Instance.Refresh(proxy);
-            Log.Debug("OpenCellPanel: cell={0} backwall={1}".F(cell,
-                source == MatchLocationSource.Backwall));
+            if (current == sel) {
+                if (DetailsScreen.Instance != null)
+                    DetailsScreen.Instance.Refresh(proxy);
+                Patches.PlaySelectClick(SelectTool.Instance.GetComponent<SelectToolHoverTextCard>());
+            }
+            var coords = Grid.CellToXY(cell);
+            Log.Debug("OpenCellPanel diag: cell={0} ({1},{2}) source={3} tile={4} backwall={5} | ".
+                F(cell, coords.x, coords.y, source, MaterialSearchOverlay.ElementName(
+                    Grid.Element[cell]), BackwallManager.HasBackwall(cell) ?
+                        MaterialSearchOverlay.ElementName(BackwallManager.At(cell).Element) :
+                        "none") +
+                "proxy={0} proxyName='{1}' selectedBefore={2} selectedAfter={3} panelTarget={4}".F(
+                    proxy.name, sel.GetName(), before == null ? "null" : before.name,
+                    SelectTool.Instance.selected == null ? "null" :
+                        SelectTool.Instance.selected.name, panelTarget.name));
         }
 
         internal static void OpenItemPanel(GameObject target) {
@@ -561,14 +588,24 @@ namespace BobbyModding.MaterialSearchOverlay {
             // A destroyed object has no components left on it, which is what the null
             // selectability reports: the row is stale, so panning alone is enough.
             var sel = target.GetComponent<KSelectable>();
-            if (sel == null)
+            if (sel == null) {
+                Log.Debug("OpenItemPanel diag: {0} has no selectable (stale row)".F(target.name));
                 return;
+            }
             var current = SelectTool.Instance.selected;
             if (current != sel)
-                SelectTool.Instance.Select(sel, skipSound: true);
+                SelectTool.Instance.Select(sel);
             if (SelectTool.Instance.selected == sel) {
                 panelTarget = target;
-                Log.Debug("OpenItemPanel: {0}".F(target.name));
+                if (current == sel)
+                    Patches.PlaySelectClick(
+                        SelectTool.Instance.GetComponent<SelectToolHoverTextCard>());
+                Log.Debug("OpenItemPanel diag: {0} selectedBefore={1} selectedAfter={2}".F(
+                    target.name, current == null ? "null" : current.name,
+                    SelectTool.Instance.selected == null ? "null" :
+                        SelectTool.Instance.selected.name));
+            } else {
+                Log.Debug("OpenItemPanel diag: {0} selection failed".F(target.name));
             }
         }
 

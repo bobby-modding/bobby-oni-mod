@@ -30,11 +30,11 @@ Paths below are shortened: `...` means
 `BobbyModding.MaterialSearchOverlay.MaterialSearchOverlayStrings`.
 
 > **The shipped `.po` files do not cover the whole table.** They were generated before the
-> position list was reworked, so they have no entries at all for the 16 `LOCATION_*` rows
-> below (marked *position list* in the last column), and their `DESCRIPTION` entry still
-> translates the older, longer legend text. Those lines show English in game until the `.po`
-> files are regenerated (see [Regenerating the .po files](#regenerating-the-po-files)) or the
-> missing blocks are added by hand.
+> position list was reworked and before the box tool existed, so they have no entries at all
+> for the 16 `LOCATION_*` rows or the 4 `AREA_*` rows below, and their `DESCRIPTION` entry still
+> translates the older, longer
+> legend text. Those lines show English in game until the `.po` files are regenerated (see
+> [Regenerating the .po files](#regenerating-the-po-files)) or the missing blocks are added by hand.
 
 | Context | English (msgid) | Used for |
 |---|---|---|
@@ -64,6 +64,10 @@ Paths below are shortened: `...` means
 | `...OVERLAYS.MATERIALSEARCH.LOCATION_SCROLL_PERCENT` | {0}% | Scroll position shown on each section header (`100%` is the top) |
 | `...OVERLAYS.MATERIALSEARCH.LOCATION_TRUNCATED` | … and {0} more | Note that rows were left out because a section hit its build cap |
 | `...OVERLAYS.MATERIALSEARCH.LOCATION_EMPTY` | Nothing found in this world | Shown instead of the position list when nothing was found |
+| `...OVERLAYS.MATERIALSEARCH.AREA_ADD` | Add area | Box tool button: arms the drag that ticks matching rows |
+| `...OVERLAYS.MATERIALSEARCH.AREA_REMOVE` | Remove area | Box tool button: arms the drag that unticks matching rows |
+| `...OVERLAYS.MATERIALSEARCH.AREA_ADD_TOOLTIP` | Drag a box over the map to select the matching cells, buildings and items inside it | Hover tooltip of the *Add area* button |
+| `...OVERLAYS.MATERIALSEARCH.AREA_REMOVE_TOOLTIP` | Drag a box over the map to deselect the matching cells, buildings and items inside it | Hover tooltip of the *Remove area* button |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_MATERIAL` | {0} materials | Count summary per kind |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_EQUIPMENT` | {0} equipment | Count summary per kind |
 | `...OVERLAYS.MATERIALSEARCH.COUNT_DUPLICANT` | {0} duplicants | Count summary per kind |
@@ -112,6 +116,11 @@ Paths below are shortened: `...` means
   `1 tile` are the singular unit words the game already uses elsewhere — translate them like the
   matching plurals in `COUNT_*`. `LOCATION_TRUNCATED` starts with the ellipsis character `…`,
   which should stay.
+- The two `AREA_*` labels sit side by side in one narrow row of the legend, so keep them short
+  and obviously opposite each other. Keep the *select* / *deselect* wording of the two tooltips
+  distinguishable — that verb is the whole difference between the buttons. The drag itself asks
+  nothing of the translator: the `W x H` over `N tiles` readout above the box is the game's own
+  drag-tool string, translated by the base game.
 
 ## Regenerating the .po files
 
